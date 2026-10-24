@@ -730,7 +730,23 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
   window.addEventListener("online",function(){refresh()});
   document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")refresh()});
 
-  loadCache(); render(); refresh();
+  // One-tap setup: link from the sheet menu / QR code: …/grid-finder/#setup=<base64url {"u":address,"k":key}>
+  // The part after # never leaves the phone (browsers do not send it to the website).
+  function setupFromLink(){
+    var h=location.hash||""; if(h.indexOf("#setup=")!==0)return false;
+    var raw=h.slice(7);
+    try{history.replaceState(null,"",location.pathname+location.search)}catch(e){location.hash=""}
+    var d; try{var b=raw.replace(/-/g,"+").replace(/_/g,"/"); while(b.length%4)b+="="; d=JSON.parse(decodeURIComponent(escape(atob(b))))}catch(e){d=null}
+    if(!d||!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(d.u||"")||String(d.k||"").length<20){status("This setup link is damaged. Open it again from the sheet.");return true}
+    LS.set("gf_bridge_url",d.u); LS.set("gf_bridge_key",d.k);
+    status("Connecting…");
+    call("list").then(function(j){places=(j.places||[]).map(function(p){p.lat=+p.lat;p.lon=+p.lon;return p});saveCache();render();status("Connected ✓ This phone is set up.");$("mp").scrollIntoView({block:"start"})})
+      .catch(function(e){if(/Wrong key|does not answer/.test(e.message)){LS.del("gf_bridge_url");LS.del("gf_bridge_key")}render();status(e.message)});
+    return true;
+  }
+
+  loadCache(); render();
+  if(!setupFromLink())refresh();
 })();
 
 </script>
