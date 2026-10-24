@@ -477,7 +477,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
   function buildText(){
     if(!cur)return;
     var t="Location X "+cur.E+", Y "+cur.N;
-    if(cur.addr)t+=", near "+cur.addr+(cur.pc&&cur.addr.indexOf(cur.pc)<0?", "+cur.pc:"");
+    if(cur.addr)t+=", near "+cur.addr+(cur.pc&&!/[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}/i.test(cur.addr)?", "+cur.pc:"");
     else if(cur.pc)t+=", near "+cur.pc+(cur.pcDist!=null?" ("+cur.pcDist+" m)":"");
     t+=": "+lastLink;
     lastText=t;
@@ -528,6 +528,22 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     var my=++adToken, el=$("addr");
     if(navigator.onLine===false||typeof fetch!=="function"){el.textContent="";return;}
     el.textContent="Looking up nearest address…";
+    var bu="",bk="";
+    try{bu=localStorage.getItem("gf_bridge_url")||"";bk=localStorage.getItem("gf_bridge_key")||"";}catch(e){}
+    if(bu&&bk){
+      // Phone is connected to My places: ask Google (through your own sheet connection) — it knows house numbers.
+      var c2=("AbortController" in window)?new AbortController():null;
+      var t2=setTimeout(function(){if(c2)c2.abort();},12000);
+      fetch(bu+"?action=address&lat="+lat+"&lon="+lon+"&key="+encodeURIComponent(bk),c2?{signal:c2.signal}:{})
+      .then(function(r){clearTimeout(t2);return r.json();}).then(function(j){
+        if(my!==adToken)return;
+        if(!j||!j.ok||!j.address)throw 0;
+        cur.addr=j.address;
+        el.textContent="Nearest address: "+j.address+(j.distance!=null&&j.distance>=15?" · about "+j.distance+" m away":"")+(j.exact?"":" (approximate)");
+        buildText();
+      }).catch(function(){ if(my===adToken)osm(); });
+    } else osm();
+    function osm(){
     var ctl=("AbortController" in window)?new AbortController():null;
     var t=setTimeout(function(){if(ctl)ctl.abort();},10000);
     fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=en&lat="+lat+"&lon="+lon,ctl?{signal:ctl.signal}:{})
@@ -540,6 +556,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
       el.textContent="Nearest address: "+line+(d!=null&&d>=15?" · about "+d+" m away":"");
       buildText();
     }).catch(function(){ if(my===adToken)el.textContent="Address: not available right now"; });
+    }
   }
 
   function show(latN,lonN,E,N,precise,accuracy){
@@ -577,7 +594,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 })();
 </script>
 <script>
-window.GF_VERSION="3.6";
+window.GF_VERSION="3.7";
 (function(){
   // ---- My places: list kept in the owner's Google sheet via a small Google program (bridge) ----
   var $=function(id){return document.getElementById(id)};
