@@ -540,7 +540,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 })();
 </script>
 <script>
-window.GF_VERSION="3.3";
+window.GF_VERSION="3.4";
 (function(){
   // ---- My places: list kept in the owner's Google sheet via a small Google program (bridge) ----
   var $=function(id){return document.getElementById(id)};
@@ -719,13 +719,33 @@ window.GF_VERSION="3.3";
   $("mpSetupOpen").onclick=openSetup; $("mpSetupOpen2").onclick=openSetup;
   $("sfCancel").onclick=function(){$("sf").hidden=true};
   $("sf").addEventListener("click",function(e){if(e.target===this)this.hidden=true});
-  function parseSetup(s){
-    var i=String(s).indexOf("#setup="); if(i<0)return null;
-    try{var b=String(s).slice(i+7).trim().replace(/-/g,"+").replace(/_/g,"/"); while(b.length%4)b+="="; return JSON.parse(decodeURIComponent(escape(atob(b))))}catch(e){return null}
+  // Accepts the setup link with anything around it: time/"Info" from the log, spaces, line breaks, %-encoding.
+  function tryDecode(p){
+    p=p.replace(/%3D/gi,"").replace(/=+$/,"");
+    try{var b=p.replace(/-/g,"+").replace(/_/g,"/"); while(b.length%4)b+="="; var d=JSON.parse(decodeURIComponent(escape(atob(b))));
+      return d&&d.u&&d.k?{u:String(d.u).trim(),k:String(d.k).trim()}:null}catch(e){return null}
   }
+  function decodePayload(p){
+    // join pieces split by spaces/line breaks until the link decodes; ignore whatever text follows it
+    var parts=String(p).split(/\s+/), acc="";
+    for(var i=0;i<parts.length;i++){
+      var m=parts[i].replace(/%3D/gi,"=").match(/^[A-Za-z0-9_\-+\/=]*/)[0];
+      acc+=m; var r=acc&&tryDecode(acc); if(r)return r;
+      if(m.length<parts[i].length)break;
+    }
+    return null;
+  }
+  function parseSetup(s){
+    s=String(s||""); var t=s; try{t=decodeURIComponent(s)}catch(e){}
+    var i=t.indexOf("setup="); if(i<0)return null;
+    return decodePayload(t.slice(i+6));
+  }
+  window.GF_parseSetup=parseSetup;
   $("sfSave").onclick=function(){
     var u=$("sfUrl").value.trim(), k=$("sfKey").value.trim();
-    var link=parseSetup(u)||parseSetup(k); if(link){u=link.u||"";k=link.k||""}
+    var link=parseSetup(u)||parseSetup(k);
+    if(link){u=link.u;k=link.k}
+    else if(/setup=|github\.io/.test(u+k)){$("sfErr").textContent="This setup link is incomplete. Copy the whole line again (it is long) and paste it into the first box.";return}
     if(!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u)){$("sfErr").textContent="The address should look like https://script.google.com/macros/s/…/exec";return}
     if(k.length<20){$("sfErr").textContent="The key looks too short. Copy it again.";return}
     var oldU=LS.get("gf_bridge_url"), oldK=LS.get("gf_bridge_key");
@@ -758,7 +778,7 @@ window.GF_VERSION="3.3";
     var h=location.hash||""; if(h.indexOf("#setup=")!==0)return false;
     var raw=h.slice(7);
     try{history.replaceState(null,"",location.pathname+location.search)}catch(e){location.hash=""}
-    var d; try{var b=raw.replace(/-/g,"+").replace(/_/g,"/"); while(b.length%4)b+="="; d=JSON.parse(decodeURIComponent(escape(atob(b))))}catch(e){d=null}
+    var d=decodePayload(raw);
     if(!d||!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(d.u||"")||String(d.k||"").length<20){status("This setup link is damaged. Open it again from the sheet.");return true}
     LS.set("gf_bridge_url",d.u); LS.set("gf_bridge_key",d.k);
     status("Connecting…");
