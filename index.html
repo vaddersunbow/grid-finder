@@ -40,6 +40,13 @@ button,.btn{display:flex;align-items:center;justify-content:center;text-align:ce
 .two{display:flex;gap:10px}.two>*{flex:1}
 .two .btn{font-size:16px;white-space:nowrap;padding:0 8px}
 [hidden]{display:none!important}
+.tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:5px;margin:0 0 14px;position:sticky;top:max(6px,env(safe-area-inset-top));z-index:10;box-shadow:0 -20px 0 6px var(--bg),0 2px 8px rgba(0,0,0,.06)}
+.tabs button{flex:1;margin:0;min-height:46px;background:transparent;color:var(--ink);border-radius:10px;font-size:17px}
+.tabs button.on{background:var(--accent);color:var(--accent-ink)}
+.upd{display:flex;align-items:center;gap:10px;background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:10px 12px;margin:0 0 12px;font-size:15px}
+.upd span{flex:1}
+.upd button{width:auto;min-height:40px;margin:0;padding:0 16px;background:var(--accent-ink);color:var(--accent);font-size:15px}
+.ver{font-size:13px;color:var(--muted);margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .mp-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .mp-head h2{font-size:19px;margin:0}
 .mp-head .count{color:var(--muted);font-size:14px;font-weight:400}
@@ -73,22 +80,30 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 <body>
 <main>
   <h1>Grid Finder</h1>
-
-  <div class="card">
-    <button class="btn here" id="here" type="button">Where am I?</button>
-    <div class="small">Uses the phone's location: shows X/Y, the nearest postcode and a message to send.</div>
-    <div class="err" id="err3" role="alert"></div>
+  <div class="upd" id="upd" hidden><span id="updText">A new version of Grid Finder is ready.</span><button id="updBtn" type="button">Update</button></div>
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" id="tabFinder" aria-controls="viewFinder">Finder</button>
+    <button type="button" role="tab" id="tabPlaces" aria-controls="viewPlaces">My places</button>
   </div>
 
+  <div id="viewPlaces" hidden>
   <div class="card" id="mp">
     <div class="mp-head"><h2>My places <span class="count" id="mpCount"></span></h2><button class="linkbtn" id="mpAdd" type="button">+ Add place</button></div>
-    <div id="mpSetupHint" class="empty" hidden>Your places are kept in your Google sheet. <button class="linkbtn" id="mpSetupOpen" type="button">Set up</button></div>
+    <div id="mpSetupHint" class="empty" hidden>Connect this phone to your list — once per phone.<br><button class="btn" id="mpSetupOpen" type="button">Connect this phone</button></div>
     <div id="mpBody" hidden>
       <input id="mpSearch" type="search" autocomplete="off" placeholder="Search name, note, postcode" style="font-size:17px">
       <div class="chips" id="mpChips"></div>
       <div id="mpList"></div>
       <div class="status" id="mpStatus"></div>
     </div>
+  </div>
+  </div>
+
+  <div id="viewFinder">
+  <div class="card">
+    <button class="btn here" id="here" type="button">Where am I?</button>
+    <div class="small">Uses the phone's location: shows X/Y, the nearest postcode and a message to send.</div>
+    <div class="err" id="err3" role="alert"></div>
   </div>
 
   <div class="card">
@@ -126,15 +141,17 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     <button class="btn plain" id="savePlace" type="button">☆ Save this place</button>
     <div class="small" id="acc"></div>
   </div>
+  </div>
 
   <details class="small help">
     <summary>Put Grid Finder on the home screen</summary>
     <p><b>iPhone</b> (Safari or Chrome): tap Share <span aria-hidden="true">⬆</span> → <b>Add to Home Screen</b> → Add.</p>
     <p><b>Android</b> (Chrome): tap <b>⋮</b> → <b>Add to Home screen</b> or <b>Install app</b> → Install.</p>
     <p>Allow location when asked — it is needed only for “Where am I?”.</p>
-    <p><b>My places</b>: set up once on each phone (address + key from your Google sheet menu “Grid Finder → Show phone setup”). On iPhone the home-screen icon keeps its own settings, so set up inside the icon. <button class="linkbtn" id="mpSetupOpen2" type="button">Set up / change</button></p>
+    <p><b>My places</b>: connect once on each phone with your private setup link. On iPhone the home-screen icon keeps its own settings, so connect inside the icon. <button class="linkbtn" id="mpSetupOpen2" type="button">Connect / change</button></p>
   </details>
   <div class="small">Works without signal for X/Y; the map and the postcode need internet. Accuracy: Ordnance Survey OSTN15 method, within about 0.2 m.</div>
+  <div class="ver"><span id="verText"></span><button class="linkbtn" id="verCheck" type="button">Check for updates</button></div>
 </main>
 <div class="sheet" id="pf" hidden>
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="pfTitle">
@@ -160,10 +177,10 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 <div class="sheet" id="sf" hidden>
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sfTitle">
     <h3 id="sfTitle">Set up My places</h3>
-    <div class="pt">Open your Google sheet “Grid Finder — My places” on the computer → menu <b>Grid Finder → Show phone setup</b>. Easiest: scan the QR code. Or paste the whole setup link into the first box (the key box can stay empty). Do it once on each phone.</div>
+    <div class="pt">Paste your private <b>setup link</b> (starts with https://vaddersunbow.github.io/grid-finder/#setup=) into the first box and tap Connect. The key box can stay empty. Once per phone.</div>
     <label for="sfUrl">Address</label>
     <input id="sfUrl" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste the setup link, or the address">
-    <label for="sfKey">Key</label>
+    <label for="sfKey">Key (only if you have address and key separately)</label>
     <input id="sfKey" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="long code">
     <div class="err" id="sfErr" role="alert"></div>
     <button id="sfSave" type="button">Connect</button>
@@ -523,6 +540,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 })();
 </script>
 <script>
+window.GF_VERSION="3.3";
 (function(){
   // ---- My places: list kept in the owner's Google sheet via a small Google program (bridge) ----
   var $=function(id){return document.getElementById(id)};
@@ -530,7 +548,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
           set:function(k,v){try{localStorage.setItem(k,v)}catch(e){}},
           del:function(k){try{localStorage.removeItem(k)}catch(e){}}};
   var DEFAULT_GROUPS=["Work","Shopping","Hobby","Home","Other"];
-  var places=[], group="All", editing=null, pending=null, showAll=false, LIMIT=6;
+  var places=[], group="All", editing=null, pending=null, showAll=true, LIMIT=1e9;
 
   function cfg(){return {url:LS.get("gf_bridge_url")||"",key:LS.get("gf_bridge_key")||""}}
   function ready(){var c=cfg();return !!(c.url&&c.key)}
@@ -666,6 +684,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
       place.id=j.id;
       var i=places.findIndex(function(x){return x.id===j.id}); if(i>=0)places[i]=Object.assign({},places[i],place); else places.push(place);
       saveCache(); closeForm(); render(); status("Saved ✓"); refresh();
+      var sp=$("savePlace"); sp.textContent="Saved ✓ — it is in My places"; setTimeout(function(){sp.textContent="☆ Save this place"},3000);
     }).catch(function(e){b.disabled=false;b.textContent=editing?"Save changes":"Save";$("pfErr").textContent=e.message});
   };
 
@@ -683,17 +702,15 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     pending={lat:c.lat,lon:c.lon,easting:c.E,northing:c.N,postcode:c.pc||""};
     openForm(null);
   };
-  // "+ Add place": use the shown point, or the phone's location
+  // "+ Add place" (in My places): save where the phone is now
   $("mpAdd").onclick=function(){
     if(!ready()){openSetup();return}
-    var c=window.GF_CUR;
-    if(c&&!$("result").hidden){$("savePlace").onclick();return}
-    status("Finding your position…");
-    $("here").click();
+    var before=window.GF_CUR, btn=this; btn.disabled=true; status("Finding your position…");
+    $("err3").textContent=""; $("here").click();
     var tries=0, iv=setInterval(function(){
       tries++;
-      if(window.GF_CUR&&!$("result").hidden){clearInterval(iv);status("");setTimeout(function(){$("savePlace").onclick()},400)}
-      else if(tries>50||$("err3").textContent){clearInterval(iv);status("Could not get the position. Find the point first (X/Y, pin or Where am I?), then tap ☆ Save this place.")}
+      if(window.GF_CUR&&window.GF_CUR!==before){clearInterval(iv);btn.disabled=false;status("");setTimeout(function(){$("savePlace").onclick()},300)}
+      else if(tries>50||$("err3").textContent){clearInterval(iv);btn.disabled=false;status($("err3").textContent||"Could not get the position. Try again outdoors, or save from the Finder tab.")}
     },500);
   };
 
@@ -750,8 +767,54 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     return true;
   }
 
-  loadCache(); render();
-  if(!setupFromLink())refresh();
+  // ---- tabs: Finder / My places ----
+  function setTab(name){
+    $("viewFinder").hidden=name!=="finder"; $("viewPlaces").hidden=name!=="places";
+    $("tabFinder").classList.toggle("on",name==="finder"); $("tabPlaces").classList.toggle("on",name==="places");
+    $("tabFinder").setAttribute("aria-selected",name==="finder"); $("tabPlaces").setAttribute("aria-selected",name==="places");
+    LS.set("gf_tab",name);
+  }
+  $("tabFinder").onclick=function(){setTab("finder");window.scrollTo(0,0)};
+  $("tabPlaces").onclick=function(){setTab("places");window.scrollTo(0,0);refresh()};
+  window.GF_setTab=setTab;
+
+  // ---- updates: one button ----
+  var VERSION=window.GF_VERSION;
+  $("verText").textContent="Grid Finder v"+VERSION;
+  function checkUpdate(manual){
+    if(navigator.onLine===false){if(manual)$("verText").textContent="Grid Finder v"+VERSION+" · no internet to check";return}
+    LS.set("gf_upd_checked",String(Date.now()));
+    fetch("index.html?check="+Date.now(),{cache:"no-store"}).then(function(r){return r.text()}).then(function(tx){
+      var m=tx.match(/window\.GF_VERSION="([^"]+)"/);
+      if(m&&m[1]!==VERSION){$("updText").textContent="Grid Finder v"+m[1]+" is ready (you have v"+VERSION+").";$("upd").hidden=false}
+      else if(manual){$("verText").textContent="Grid Finder v"+VERSION+" · this is the latest version ✓"}
+    }).catch(function(){if(manual)$("verText").textContent="Grid Finder v"+VERSION+" · could not check, try later"});
+  }
+  function doUpdate(){
+    $("updBtn").disabled=true; $("updBtn").textContent="Updating…";
+    LS.set("gf_updated_from",VERSION);
+    var p=[];
+    if(window.caches&&caches.keys)p.push(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))}));
+    if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)p.push(navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.update().catch(function(){})}))}));
+    Promise.all(p).catch(function(){}).then(function(){location.replace(location.pathname+"?u="+Date.now())});
+  }
+  $("updBtn").onclick=doUpdate;
+  $("verCheck").onclick=function(){checkUpdate(true)};
+  if(/[?&]u=\d+/.test(location.search)){
+    try{history.replaceState(null,"",location.pathname+location.hash)}catch(e){}
+    var from=LS.get("gf_updated_from"); LS.del("gf_updated_from");
+    if(from&&from!==VERSION)$("verText").textContent="Updated to v"+VERSION+" ✓";
+  }
+  setTimeout(function(){checkUpdate(false)},2500);
+  document.addEventListener("visibilitychange",function(){
+    if(document.visibilityState==="visible"&&Date.now()-(+LS.get("gf_upd_checked")||0)>3600000)checkUpdate(false);
+  });
+
+  loadCache();
+  var linked=setupFromLink();
+  setTab(linked?"places":(LS.get("gf_tab")||(ready()?"places":"finder")));
+  render();
+  if(!linked)refresh();
 })();
 
 </script>
