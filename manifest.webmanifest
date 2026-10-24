@@ -3,7 +3,7 @@
   "name": "Grid Finder",
   "short_name": "Grid Finder",
   "description": "UK grid reference (Easting/Northing) to map, postcode and WhatsApp link",
-  "start_url": "./",
+  "start_url": "./?app=1",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
