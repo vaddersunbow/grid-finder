@@ -540,7 +540,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 })();
 </script>
 <script>
-window.GF_VERSION="3.4";
+window.GF_VERSION="3.5";
 (function(){
   // ---- My places: list kept in the owner's Google sheet via a small Google program (bridge) ----
   var $=function(id){return document.getElementById(id)};
@@ -743,9 +743,18 @@ window.GF_VERSION="3.4";
   window.GF_parseSetup=parseSetup;
   $("sfSave").onclick=function(){
     var u=$("sfUrl").value.trim(), k=$("sfKey").value.trim();
-    var link=parseSetup(u)||parseSetup(k);
-    if(link){u=link.u;k=link.k}
-    else if(/setup=|github\.io/.test(u+k)){$("sfErr").textContent="This setup link is incomplete. Copy the whole line again (it is long) and paste it into the first box.";return}
+    var EXEC=/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+    if(/setup(=|%3D)/i.test(u)){                      // setup link in the first box wins
+      var l1=parseSetup(u); if(!l1){$("sfErr").textContent="This setup link is incomplete. Copy the whole line again (it is long).";return}
+      u=l1.u;k=l1.k;
+    } else if(EXEC.test(u)&&/setup(=|%3D)/i.test(k)){ // address typed + link in the key box: keep the typed address, take only the key
+      var l2=parseSetup(k); if(!l2){$("sfErr").textContent="The key box has an incomplete link. Clear it and paste only the key.";return}
+      k=l2.k;
+    } else if(!u&&/setup(=|%3D)/i.test(k)){
+      var l3=parseSetup(k); if(!l3){$("sfErr").textContent="This setup link is incomplete. Copy the whole line again (it is long).";return}
+      u=l3.u;k=l3.k;
+    }
+    if(/\/dev$/.test(u)){$("sfErr").textContent="This link has the test address (…/dev) and will not work. Make a fresh setup link (Apps Script: run phoneSetupLink) and paste the new one.";return}
     if(!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u)){$("sfErr").textContent="The address should look like https://script.google.com/macros/s/…/exec";return}
     if(k.length<20){$("sfErr").textContent="The key looks too short. Copy it again.";return}
     var oldU=LS.get("gf_bridge_url"), oldK=LS.get("gf_bridge_key");
@@ -779,7 +788,8 @@ window.GF_VERSION="3.4";
     var raw=h.slice(7);
     try{history.replaceState(null,"",location.pathname+location.search)}catch(e){location.hash=""}
     var d=decodePayload(raw);
-    if(!d||!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(d.u||"")||String(d.k||"").length<20){status("This setup link is damaged. Open it again from the sheet.");return true}
+    if(d&&/\/dev$/.test(d.u||"")){status("This setup link has the test address (…/dev) and will not work. Make a fresh one (Apps Script: run phoneSetupLink).");return true}
+    if(!d||!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(d.u||"")||String(d.k||"").length<20){status("This setup link is damaged. Make a fresh one and open it again.");return true}
     LS.set("gf_bridge_url",d.u); LS.set("gf_bridge_key",d.k);
     status("Connecting…");
     call("list").then(function(j){places=(j.places||[]).map(function(p){p.lat=+p.lat;p.lon=+p.lon;return p});saveCache();render();status("Connected ✓ This phone is set up.");$("mp").scrollIntoView({block:"start"})})
