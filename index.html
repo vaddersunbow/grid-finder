@@ -102,7 +102,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
   <div id="viewFinder">
   <div class="card">
     <button class="btn here" id="here" type="button">Where am I?</button>
-    <div class="small">Uses the phone's location: shows X/Y, the nearest postcode and a message to send.</div>
+    <div class="small">Uses the phone's location: shows X/Y, the nearest postcode and street address, and a message to send.</div>
     <div class="err" id="err3" role="alert"></div>
   </div>
 
@@ -130,6 +130,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
   <div class="card" id="result" hidden>
     <div class="xy" id="xy"></div>
     <div class="pc" id="pc"></div>
+    <div class="pc" id="addr"></div>
     <div class="coords" id="coords"></div>
     <iframe class="map" id="map" title="Map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
     <a class="btn wa" id="wa" target="_blank" rel="noopener">Send in WhatsApp</a>
@@ -150,7 +151,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     <p>Allow location when asked — it is needed only for “Where am I?”.</p>
     <p><b>My places</b>: connect once on each phone with your private setup link. On iPhone the home-screen icon keeps its own settings, so connect inside the icon. <button class="linkbtn" id="mpSetupOpen2" type="button">Connect / change</button></p>
   </details>
-  <div class="small">Works without signal for X/Y; the map and the postcode need internet. Accuracy: Ordnance Survey OSTN15 method, within about 0.2 m.</div>
+  <div class="small">Works without signal for X/Y; the map, postcode and address need internet. Addresses: © OpenStreetMap contributors. Accuracy: Ordnance Survey OSTN15 method, within about 0.2 m.</div>
   <div class="ver"><span id="verText"></span><button class="linkbtn" id="verCheck" type="button">Check for updates</button></div>
 </main>
 <div class="sheet" id="pf" hidden>
@@ -401,7 +402,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 
   var $=function(id){return document.getElementById(id)};
   var eIn=$("e"), nIn=$("n"), refIn=$("ref"), err=$("err");
-  var lastLink="", lastText="", cur=null, pcToken=0;
+  var lastLink="", lastText="", cur=null, pcToken=0, adToken=0;
 
   $("toggleRef").onclick=function(){var b=$("refBox");b.hidden=!b.hidden;if(!b.hidden)refIn.focus();};
 
@@ -476,7 +477,8 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
   function buildText(){
     if(!cur)return;
     var t="Location X "+cur.E+", Y "+cur.N;
-    if(cur.pc)t+=", near "+cur.pc+(cur.pcDist!=null?" ("+cur.pcDist+" m)":"");
+    if(cur.addr)t+=", near "+cur.addr+(cur.pc&&cur.addr.indexOf(cur.pc)<0?", "+cur.pc:"");
+    else if(cur.pc)t+=", near "+cur.pc+(cur.pcDist!=null?" ("+cur.pcDist+" m)":"");
     t+=": "+lastLink;
     lastText=t;
     $("wa").href="https://wa.me/?text="+encodeURIComponent(lastText);
@@ -506,9 +508,43 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     }).catch(function(){ if(my===pcToken)pc.textContent="Postcode: not available (no internet?)"; });
   }
 
+  // Nearest street address from OpenStreetMap (free). House numbers are sometimes missing.
+  function addrLine(a){
+    if(!a)return "";
+    var house=a.house_number||a.house_name||"";
+    var road=a.road||a.pedestrian||a.footway||a.path||a.cycleway||a.service||a.industrial||a.retail||a.commercial||"";
+    var place=a.village||a.town||a.city||a.hamlet||a.suburb||a.neighbourhood||"";
+    var first=(house&&road)?house+" "+road:(road||house);
+    var parts=[];
+    if(first)parts.push(first);
+    if(place&&place!==first)parts.push(place);
+    return parts.join(", ");
+  }
+  function distM(la1,lo1,la2,lo2){
+    var r=Math.PI/180, x=(lo2-lo1)*r*Math.cos((la1+la2)/2*r), y=(la2-la1)*r;
+    return Math.round(Math.sqrt(x*x+y*y)*6371000);
+  }
+  function findAddress(lat,lon){
+    var my=++adToken, el=$("addr");
+    if(navigator.onLine===false||typeof fetch!=="function"){el.textContent="";return;}
+    el.textContent="Looking up nearest address…";
+    var ctl=("AbortController" in window)?new AbortController():null;
+    var t=setTimeout(function(){if(ctl)ctl.abort();},10000);
+    fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=en&lat="+lat+"&lon="+lon,ctl?{signal:ctl.signal}:{})
+    .then(function(r){clearTimeout(t);return r.json();}).then(function(j){
+      if(my!==adToken)return;
+      var line=addrLine(j&&j.address);
+      if(!line){el.textContent="No street address found nearby";return;}
+      var d=(j.lat&&j.lon)?distM(+lat,+lon,+j.lat,+j.lon):null;
+      cur.addr=line;
+      el.textContent="Nearest address: "+line+(d!=null&&d>=15?" · about "+d+" m away":"");
+      buildText();
+    }).catch(function(){ if(my===adToken)el.textContent="Address: not available right now"; });
+  }
+
   function show(latN,lonN,E,N,precise,accuracy){
     var lat=latN.toFixed(6), lon=lonN.toFixed(6);
-    cur={E:Math.round(E),N:Math.round(N),pc:null,pcDist:null,lat:latN,lon:lonN};
+    cur={E:Math.round(E),N:Math.round(N),pc:null,pcDist:null,addr:null,lat:latN,lon:lonN};
     window.GF_CUR=cur;
     lastLink="https://www.google.com/maps/search/?api=1&query="+lat+","+lon;
     $("xy").textContent="X "+cur.E+"  Y "+cur.N;
@@ -524,6 +560,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     $("result").scrollIntoView({behavior:"smooth",block:"start"});
     if(document.activeElement)document.activeElement.blur();
     findPostcode(lat,lon);
+    findAddress(lat,lon);
   }
 
   $("copy").onclick=function(){
@@ -540,7 +577,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 })();
 </script>
 <script>
-window.GF_VERSION="3.5";
+window.GF_VERSION="3.6";
 (function(){
   // ---- My places: list kept in the owner's Google sheet via a small Google program (bridge) ----
   var $=function(id){return document.getElementById(id)};
