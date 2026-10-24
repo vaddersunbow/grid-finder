@@ -160,9 +160,9 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 <div class="sheet" id="sf" hidden>
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sfTitle">
     <h3 id="sfTitle">Set up My places</h3>
-    <div class="pt">Open your Google sheet “Grid Finder — My places” → menu <b>Grid Finder → Show phone setup</b>. Copy the address and the key here. Do it once on each phone.</div>
+    <div class="pt">Open your Google sheet “Grid Finder — My places” on the computer → menu <b>Grid Finder → Show phone setup</b>. Easiest: scan the QR code. Or paste the whole setup link into the first box (the key box can stay empty). Do it once on each phone.</div>
     <label for="sfUrl">Address</label>
-    <input id="sfUrl" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
+    <input id="sfUrl" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste the setup link, or the address">
     <label for="sfKey">Key</label>
     <input id="sfKey" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="long code">
     <div class="err" id="sfErr" role="alert"></div>
@@ -702,8 +702,13 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
   $("mpSetupOpen").onclick=openSetup; $("mpSetupOpen2").onclick=openSetup;
   $("sfCancel").onclick=function(){$("sf").hidden=true};
   $("sf").addEventListener("click",function(e){if(e.target===this)this.hidden=true});
+  function parseSetup(s){
+    var i=String(s).indexOf("#setup="); if(i<0)return null;
+    try{var b=String(s).slice(i+7).trim().replace(/-/g,"+").replace(/_/g,"/"); while(b.length%4)b+="="; return JSON.parse(decodeURIComponent(escape(atob(b))))}catch(e){return null}
+  }
   $("sfSave").onclick=function(){
     var u=$("sfUrl").value.trim(), k=$("sfKey").value.trim();
+    var link=parseSetup(u)||parseSetup(k); if(link){u=link.u||"";k=link.k||""}
     if(!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u)){$("sfErr").textContent="The address should look like https://script.google.com/macros/s/…/exec";return}
     if(k.length<20){$("sfErr").textContent="The key looks too short. Copy it again.";return}
     var oldU=LS.get("gf_bridge_url"), oldK=LS.get("gf_bridge_key");
