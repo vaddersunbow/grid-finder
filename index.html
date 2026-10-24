@@ -24,22 +24,33 @@ label{display:block;font-size:14px;color:var(--muted);margin:0 0 4px}
 .row>div{flex:1}
 input{width:100%;font-size:22px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font-variant-numeric:tabular-nums}
 input:focus{outline:2px solid var(--accent);border-color:transparent}
-button,.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:52px;margin-top:10px;font:600 17px/1 inherit;font-family:inherit;border:0;border-radius:12px;background:var(--accent);color:var(--accent-ink);text-decoration:none;cursor:pointer}
+button,.btn{display:flex;align-items:center;justify-content:center;text-align:center;width:100%;min-height:52px;margin-top:10px;padding:0 12px;font-family:inherit;font-size:17px;font-weight:600;line-height:1.2;border:0;border-radius:12px;background:var(--accent);color:var(--accent-ink);text-decoration:none;cursor:pointer;box-sizing:border-box}
 .btn.wa{background:var(--wa);color:#fff}
 .btn.plain{background:transparent;color:var(--accent);border:1px solid var(--line)}
 .small{font-size:14px;color:var(--muted);margin-top:8px}
-.toggle{background:none;color:var(--accent);min-height:auto;margin:10px 0 0;padding:4px 0;font-weight:500;font-size:15px;width:auto}
+.toggle{background:none;color:var(--accent);min-height:auto;margin:10px 0 0;padding:4px 0;font-weight:500;font-size:15px;width:auto;justify-content:flex-start;text-align:left}
+.err:empty{display:none}
+.help{margin:0 0 10px}.help summary{color:var(--accent);font-weight:600;cursor:pointer;padding:6px 0}.help p{margin:6px 0}
 .err{color:var(--err);font-size:15px;margin-top:8px;min-height:1em}
 .xy{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;margin-bottom:2px}
+.pc{font-size:17px;font-weight:600;margin:2px 0 4px;min-height:1.2em}
+.btn.here{background:var(--accent);font-size:18px;min-height:58px;margin-top:0}
 .coords{font-size:15px;color:var(--muted);font-variant-numeric:tabular-nums}
 .map{width:100%;height:260px;border:0;border-radius:10px;margin:10px 0 0;background:var(--bg)}
 .two{display:flex;gap:10px}.two>*{flex:1}
+.two .btn{font-size:16px;white-space:nowrap;padding:0 8px}
 [hidden]{display:none!important}
 </style>
 </head>
 <body>
 <main>
   <h1>Grid Finder</h1>
+
+  <div class="card">
+    <button class="btn here" id="here" type="button">Where am I?</button>
+    <div class="small">Uses the phone's location: shows X/Y, the nearest postcode and a message to send.</div>
+    <div class="err" id="err3" role="alert"></div>
+  </div>
 
   <div class="card">
     <div class="row">
@@ -64,18 +75,25 @@ button,.btn{display:flex;align-items:center;justify-content:center;width:100%;mi
 
   <div class="card" id="result" hidden>
     <div class="xy" id="xy"></div>
+    <div class="pc" id="pc"></div>
     <div class="coords" id="coords"></div>
     <iframe class="map" id="map" title="Map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
     <a class="btn wa" id="wa" target="_blank" rel="noopener">Send in WhatsApp</a>
     <div class="two">
-      <a class="btn plain" id="gm" target="_blank" rel="noopener">Open Google Maps</a>
+      <a class="btn plain" id="gm" target="_blank" rel="noopener">Google Maps</a>
       <button class="btn plain" id="copy" type="button">Copy link</button>
     </div>
     <button class="btn plain" id="share" type="button" hidden>Share…</button>
     <div class="small" id="acc"></div>
   </div>
 
-  <div class="small">Works out on site without signal for the calculation; the map preview needs internet. Accuracy: Ordnance Survey OSTN15 method, within about 0.2 m.</div>
+  <details class="small help">
+    <summary>Put Grid Finder on the home screen</summary>
+    <p><b>iPhone</b> (Safari or Chrome): tap Share <span aria-hidden="true">⬆</span> → <b>Add to Home Screen</b> → Add.</p>
+    <p><b>Android</b> (Chrome): tap <b>⋮</b> → <b>Add to Home screen</b> or <b>Install app</b> → Install.</p>
+    <p>Allow location when asked — it is needed only for “Where am I?”.</p>
+  </details>
+  <div class="small">Works without signal for X/Y; the map and the postcode need internet. Accuracy: Ordnance Survey OSTN15 method, within about 0.2 m.</div>
 </main>
 <script>
 // OSGB36 National Grid (Easting/Northing) -> WGS84 lat/lon.
@@ -229,7 +247,7 @@ button,.btn{display:flex;align-items:center;justify-content:center;width:100%;mi
   function parseLocation(text) {
     let t = String(text);
     try { t = decodeURIComponent(t.replace(/\+/g, " ")); } catch (e) {}
-    const okUK = (la, lo) => la >= 49 && la <= 61.5 && lo >= -9.5 && lo <= 2.5;
+    const okUK = (la, lo) => la >= 49 && la <= 61.5 && lo >= -9.5 && lo <= 2.5; // Ireland is filtered later by inGB()
     const num = "(-?\\d{1,3}(?:\\.\\d+)?)";
     // Google place pin "!3d<lat>!4d<lon>" is the real pin (the "@" value is only the map centre).
     let m = t.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
@@ -262,7 +280,15 @@ button,.btn{display:flex;align-items:center;justify-content:center;width:100%;mi
     return null;
   }
 
-  root.GF = { tmInverse, helmertToWGS84, gridToWGS84, parseGridRef, tmForward, wgs84ToGrid, parseLocation };
+  // Great Britain only (Ireland / Northern Ireland use the Irish Grid).
+  function isIreland(la, lo) {
+    return (la >= 51.3 && la < 55.0 && lo < -5.4) || (la >= 55.0 && la <= 55.45 && lo < -5.95);
+  }
+  function inGB(la, lo) {
+    return la >= 49 && la <= 61.5 && lo >= -9.5 && lo <= 2.5 && !isIreland(la, lo);
+  }
+
+  root.GF = { tmInverse, helmertToWGS84, gridToWGS84, parseGridRef, tmForward, wgs84ToGrid, parseLocation, inGB, isIreland };
   if (typeof module !== "undefined") module.exports = root.GF;
 })(typeof window !== "undefined" ? window : globalThis);
 
@@ -282,7 +308,7 @@ button,.btn{display:flex;align-items:center;justify-content:center;width:100%;mi
 
   var $=function(id){return document.getElementById(id)};
   var eIn=$("e"), nIn=$("n"), refIn=$("ref"), err=$("err");
-  var lastLink="", lastText="";
+  var lastLink="", lastText="", cur=null, pcToken=0;
 
   $("toggleRef").onclick=function(){var b=$("refBox");b.hidden=!b.hidden;if(!b.hidden)refIn.focus();};
 
@@ -294,6 +320,7 @@ button,.btn{display:flex;align-items:center;justify-content:center;width:100%;mi
   [eIn,nIn,refIn].forEach(function(el){el.addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();find();}})});
   $("go").onclick=find;
   $("go2").onclick=findPin;
+  $("here").onclick=findMe;
   $("pin").addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();findPin();}});
 
   function num(s){s=String(s).replace(/[\s,]/g,"");return /^\d+(\.\d+)?$/.test(s)?parseFloat(s):NaN;}
@@ -323,26 +350,86 @@ button,.btn{display:flex;align-items:center;justify-content:center;width:100%;mi
     var p=GF.parseLocation(txt);
     if(p&&p.short){e2.textContent="This is a short link, the location is hidden inside it. Open it once, then copy the long address from the top of the browser and paste it here.";return;}
     if(!p){e2.textContent="No UK location found in this text.";return;}
+    if(GF.isIreland(p.lat,p.lon)){e2.textContent="This point is in Ireland / Northern Ireland. It uses the Irish Grid, which this app does not support.";return;}
     var g=GF.wgs84ToGrid(p.lat,p.lon);
     eIn.value=String(Math.round(g.E)); nIn.value=String(Math.round(g.N));
     show(p.lat,p.lon,g.E,g.N,g.precise);
   }
 
-  function show(latN,lonN,E,N,precise){
+  function findMe(){
+    var e3=$("err3"), btn=$("here"); e3.textContent=""; err.textContent=""; $("err2").textContent="";
+    if(!navigator.geolocation){e3.textContent="This phone/browser cannot share location.";return;}
+    btn.disabled=true; btn.textContent="Finding your position…";
+    navigator.geolocation.getCurrentPosition(function(pos){
+      btn.disabled=false; btn.textContent="Where am I?";
+      var la=pos.coords.latitude, lo=pos.coords.longitude, acc=pos.coords.accuracy;
+      var g=GF.wgs84ToGrid(la,lo);
+      if(GF.isIreland(la,lo)){e3.textContent="You are in Ireland / Northern Ireland. It uses the Irish Grid, which this app does not support.";return;}
+      if(!GF.inGB(la,lo)||g.E<0||g.E>700000||g.N<0||g.N>1300000){e3.textContent="Your position seems to be outside Great Britain.";return;}
+      eIn.value=String(Math.round(g.E)); nIn.value=String(Math.round(g.N));
+      show(la,lo,g.E,g.N,g.precise,acc);
+    },function(e){
+      btn.disabled=false; btn.textContent="Where am I?";
+      var ua=navigator.userAgent||"", ios=/iPhone|iPad|iPod/.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1), android=/Android/.test(ua);
+      if(e&&e.code===1){
+        if(ios) e3.textContent="Location is blocked. iPhone: Settings → Privacy & Security → Location Services → turn it on, then Safari Websites (or Chrome, if you use Chrome) → While Using the App. Then try again.";
+        else if(android) e3.textContent="Location is blocked. Android: swipe down and turn Location on. Then in Chrome: ⋮ → Settings → Site settings → Location → allow vaddersunbow.github.io. If Grid Finder is on your home screen: press and hold its icon → App info → Permissions → Location → Allow.";
+        else e3.textContent="Location is blocked. Allow location for this site in your browser settings, then try again.";
+      } else if(e&&e.code===2&&android) e3.textContent="Could not get your position. Check that Location is turned on (swipe down from the top), then try again.";
+      else e3.textContent="Could not get your position. Try again, ideally outdoors.";
+    },{enableHighAccuracy:true,timeout:20000,maximumAge:0});
+  }
+
+  function buildText(){
+    if(!cur)return;
+    var t="Location X "+cur.E+", Y "+cur.N;
+    if(cur.pc)t+=", near "+cur.pc+(cur.pcDist!=null?" ("+cur.pcDist+" m)":"");
+    t+=": "+lastLink;
+    lastText=t;
+    $("wa").href="https://wa.me/?text="+encodeURIComponent(lastText);
+  }
+
+  function findPostcode(lat,lon){
+    var my=++pcToken, pc=$("pc");
+    if(navigator.onLine===false){pc.textContent="Postcode: needs internet";return;}
+    if(typeof fetch!=="function"){pc.textContent="Postcode: not available in this browser";return;}
+    pc.textContent="Looking up nearest postcode…";
+    function get(url){
+      var ctl=("AbortController" in window)?new AbortController():null;
+      var t=setTimeout(function(){if(ctl)ctl.abort();},8000);
+      return fetch(url,ctl?{signal:ctl.signal}:{}).then(function(r){clearTimeout(t);return r.json();});
+    }
+    var base="https://api.postcodes.io/postcodes?lon="+lon+"&lat="+lat;
+    get(base+"&limit=1&radius=2000").then(function(j){
+      if(j&&j.result&&j.result.length)return j;
+      return get(base+"&widesearch=true");
+    }).then(function(j){
+      if(my!==pcToken)return;
+      var r=j&&j.result&&j.result[0];
+      if(!r){pc.textContent="No postcode found nearby";return;}
+      cur.pc=r.postcode; cur.pcDist=(r.distance!=null)?Math.round(r.distance):null;
+      pc.textContent="Nearest postcode: "+r.postcode+(cur.pcDist!=null?" · about "+cur.pcDist+" m away":"");
+      buildText();
+    }).catch(function(){ if(my===pcToken)pc.textContent="Postcode: not available (no internet?)"; });
+  }
+
+  function show(latN,lonN,E,N,precise,accuracy){
     var lat=latN.toFixed(6), lon=lonN.toFixed(6);
-    var xy="X "+Math.round(E)+"  Y "+Math.round(N);
+    cur={E:Math.round(E),N:Math.round(N),pc:null,pcDist:null};
     lastLink="https://www.google.com/maps/search/?api=1&query="+lat+","+lon;
-    lastText="Location "+xy.replace("  ",", ")+": "+lastLink;
-    $("xy").textContent=xy;
+    $("xy").textContent="X "+cur.E+"  Y "+cur.N;
     $("coords").textContent=lat+", "+lon;
     $("map").src="https://maps.google.com/maps?q="+lat+","+lon+"&z=17&output=embed";
-    $("wa").href="https://wa.me/?text="+encodeURIComponent(lastText);
     $("gm").href=lastLink;
-    $("acc").textContent=precise?"Precise conversion (OSTN15).":"Approximate conversion (up to ~5 m): point is outside the correction area.";
+    buildText();
+    var a=precise?"Precise conversion (OSTN15).":"Approximate conversion (up to ~5 m): point is outside the correction area.";
+    if(accuracy!=null){a="Phone position accurate to about "+Math.max(1,Math.round(accuracy))+" m"+(accuracy>50?" — weak signal, check the map.":".")+" "+a;}
+    $("acc").textContent=a;
     $("share").hidden=!navigator.share;
     $("result").hidden=false;
     $("result").scrollIntoView({behavior:"smooth",block:"start"});
     if(document.activeElement)document.activeElement.blur();
+    findPostcode(lat,lon);
   }
 
   $("copy").onclick=function(){
@@ -352,7 +439,7 @@ button,.btn{display:flex;align-items:center;justify-content:center;width:100%;mi
     function fallback(){var t=document.createElement("textarea");t.value=lastLink;document.body.appendChild(t);t.select();try{document.execCommand("copy");ok();}catch(e){}document.body.removeChild(t);}
   };
   // Offline: keep a copy on the phone after the first visit (only on a real web address).
-  if("serviceWorker" in navigator && location.protocol==="https:"){
+  if("serviceWorker" in navigator && (location.protocol==="https:"||location.hostname==="localhost")){
     try{navigator.serviceWorker.register("sw.js").catch(function(){});}catch(e){}
   }
   $("share").onclick=function(){ if(navigator.share) navigator.share({text:lastText}).catch(function(){}); };
