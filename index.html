@@ -75,6 +75,19 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 .panel input{font-size:17px}
 .btn.danger{background:transparent;color:var(--err);border:1px solid var(--line)}
 .pt{font-size:14px;color:var(--muted);margin:4px 0 0}
+.trs{position:fixed;inset:0;z-index:60;background:var(--bg);overflow:auto;-webkit-overflow-scrolling:touch}
+.trp{max-width:640px;margin:0 auto;padding:max(12px,env(safe-area-inset-top)) 14px max(20px,env(safe-area-inset-bottom))}
+.trh{display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;background:var(--bg);padding:6px 0;z-index:5}
+.trh h3{margin:0;font-size:19px}
+.trh .linkbtn{font-size:17px;padding:8px 4px}
+.trmap{width:100%;height:55vh;min-height:280px;border-radius:12px;margin:10px 0;background:var(--card);border:1px solid var(--line)}
+.steps{margin:10px 0;padding-left:24px}.steps li{padding:6px 0;border-bottom:1px solid var(--line)}.steps .sd{color:var(--muted);font-size:14px;white-space:nowrap}
+.chk{border-radius:10px;padding:10px 12px;font-size:15px;margin:6px 0;border:1px solid var(--line);background:var(--card)}
+.chk.ok{border-color:#2e7d32}.chk.bad{border-color:#c62828;background:rgba(198,40,40,.08)}.chk.mid{border-color:#f9a825;background:rgba(249,168,37,.1)}
+.wl{margin:6px 0;padding-left:20px;font-size:15px}.wl li{padding:5px 0;cursor:pointer}.wl li.red{color:var(--err)}
+.warnline{color:var(--err)}
+.place .go.tk{padding:0 12px}
+
 </style>
 </head>
 <body>
@@ -140,6 +153,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     </div>
     <button class="btn plain" id="share" type="button" hidden>Share…</button>
     <button class="btn plain" id="savePlace" type="button">☆ Save this place</button>
+    <button class="btn plain" id="truckHere" type="button">🚚 Truck route here (backup)</button>
     <div class="small" id="acc"></div>
   </div>
   </div>
@@ -167,12 +181,25 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     <textarea id="pfNote" maxlength="2000" placeholder="e.g. Gate by the warehouse, key at security, code 1234"></textarea>
     <div class="err" id="pfErr" role="alert"></div>
     <button id="pfSave" type="button">Save</button>
+    <button class="btn plain" id="pfTruck" type="button" hidden>🚚 Truck route (backup)</button>
     <div class="two">
       <a class="btn plain" id="pfGo" target="_blank" rel="noopener" hidden>Route</a>
       <a class="btn plain" id="pfWa" target="_blank" rel="noopener" hidden>WhatsApp</a>
     </div>
     <button class="btn danger" id="pfDel" type="button" hidden>Delete place</button>
     <button class="btn plain" id="pfCancel" type="button">Cancel</button>
+  </div>
+</div>
+<div class="trs" id="tr" hidden>
+  <div class="trp" role="dialog" aria-modal="true" aria-labelledby="trTitle">
+    <div class="trh"><h3 id="trTitle">Truck route</h3><button class="linkbtn" id="trClose" type="button">Close</button></div>
+    <div class="pt" id="trSum"></div>
+    <div class="pt" id="trStatus"></div>
+    <div class="err" id="trErr" role="alert"></div>
+    <div id="trMap" class="trmap"></div>
+    <div id="trWarn"></div>
+    <ol id="trSteps" class="steps"></ol>
+    <div class="small">Backup route for your truck (height and weight limits), from openrouteservice and OpenStreetMap data. Not every bridge is in the data — <b>road signs always come first</b>. Start = where the phone is now.</div>
   </div>
 </div>
 <div class="sheet" id="sf" hidden>
@@ -594,7 +621,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 })();
 </script>
 <script>
-window.GF_VERSION="3.7";
+window.GF_VERSION="3.8";
 (function(){
   // ---- My places: list kept in the owner's Google sheet via a small Google program (bridge) ----
   var $=function(id){return document.getElementById(id)};
@@ -672,7 +699,9 @@ window.GF_VERSION="3.7";
       if(p.postcode)meta.push('<span class="nw">'+esc(p.postcode)+'</span>');
       if(p.easting!==""&&p.easting!=null)meta.push('<span class="nw">X '+Math.round(p.easting)+' Y '+Math.round(p.northing)+'</span>');
       row.innerHTML='<div class="info"><div class="nm">'+esc(p.name)+'</div><div class="meta">'+meta.join(" · ")+'</div>'+(p.note?'<div class="note">'+esc(p.note)+'</div>':'')+'</div>'+
-        '<a class="btn go" target="_blank" rel="noopener" href="'+routeUrl(p)+'" aria-label="Route to '+esc(p.name)+'">Go</a>';
+        '<a class="btn go" target="_blank" rel="noopener" href="'+routeUrl(p)+'" aria-label="Route to '+esc(p.name)+'">Go</a>'+
+        '<button class="btn go tk plain" type="button" aria-label="Truck route to '+esc(p.name)+'">🚚</button>';
+      row.querySelector(".tk").onclick=function(){if(window.GF_openTruck)window.GF_openTruck({lat:+p.lat,lon:+p.lon,name:p.name})};
       row.querySelector(".info").onclick=function(){ if(p.note&&!row.classList.contains("open")){row.classList.add("open");return} openForm(p) };
       box.appendChild(row);
     });
@@ -717,7 +746,8 @@ window.GF_VERSION="3.7";
     $("pfName").value=p?p.name:""; $("pfNote").value=p?(p.note||""):"";
     fillGroups(p?p.group:null);
     $("pfPoint").textContent=src?pointText(src):"";
-    $("pfDel").hidden=!p; $("pfGo").hidden=!p; $("pfWa").hidden=!p;
+    $("pfDel").hidden=!p; $("pfGo").hidden=!p; $("pfWa").hidden=!p; $("pfTruck").hidden=!p;
+    $("pfTruck").onclick=p?function(){closeForm();if(window.GF_openTruck)window.GF_openTruck({lat:+p.lat,lon:+p.lon,name:p.name})}:null;
     if(p){$("pfGo").href=routeUrl(p);$("pfWa").href=waText(p)}
     $("pfSave").disabled=false; $("pfSave").textContent=p?"Save changes":"Save";
     $("pf").hidden=false;
@@ -899,6 +929,164 @@ window.GF_VERSION="3.7";
   setTab(linked?"places":(LS.get("gf_tab")||(ready()?"places":"finder")));
   render();
   if(!linked)refresh();
+})();
+
+(function(){
+  // ---- Backup truck route: route from openrouteservice (HGV profile) through the owner's bridge,
+  //      plus an independent check of low bridges / weight limits along it (OpenStreetMap via Overpass).
+  var $=function(id){return document.getElementById(id)};
+  var LS={get:function(k){try{return localStorage.getItem(k)}catch(e){return null}},
+          set:function(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+  var map=null, layer=null, cur=null;
+  function cfg(){return {url:LS.get("gf_bridge_url")||"",key:LS.get("gf_bridge_key")||""}}
+  function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]})}
+  function miles(m){var mi=m/1609.344;return mi>=10?mi.toFixed(0)+" mi":mi.toFixed(1)+" mi"}
+  function stepDist(m){return m<320?Math.round(m*1.0936/10)*10+" yd":miles(m)}
+  function mins(s){var m=Math.round(s/60);return m<60?m+" min":Math.floor(m/60)+" h "+(m%60)+" min"}
+  function ftin(m){var i=Math.round(m/0.0254);return Math.floor(i/12)+"'"+(i%12)+'"'}
+
+  function show(on){$("tr").hidden=!on; document.body.style.overflow=on?"hidden":""}
+  $("trClose").onclick=function(){show(false)};
+  document.addEventListener("keydown",function(e){if(e.key==="Escape"&&!$("tr").hidden)show(false)});
+
+  function loadLeaflet(){
+    if(window.L)return Promise.resolve();
+    return new Promise(function(ok,bad){
+      var c=document.createElement("link");c.rel="stylesheet";c.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";document.head.appendChild(c);
+      var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+      s.onload=function(){ok()};s.onerror=function(){bad(new Error("map did not load"))};document.head.appendChild(s);
+    });
+  }
+
+  function getPos(){
+    return new Promise(function(ok,bad){
+      if(!navigator.geolocation){bad(new Error("This phone cannot share location."));return}
+      navigator.geolocation.getCurrentPosition(function(p){ok({lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy})},
+        function(e){bad(new Error(e&&e.code===1?"Location is blocked for Grid Finder. Allow location, then try again.":"Could not get your position. Try again."))},
+        {enableHighAccuracy:true,timeout:20000,maximumAge:30000});
+    });
+  }
+
+  function askRoute(from,to){
+    var c=cfg();
+    var u=c.url+"?action=truck&fromLat="+from.lat+"&fromLon="+from.lon+"&toLat="+to.lat+"&toLon="+to.lon+"&key="+encodeURIComponent(c.key)+"&t="+Date.now();
+    var ctl=("AbortController" in window)?new AbortController():null, t=setTimeout(function(){if(ctl)ctl.abort()},40000);
+    return fetch(u,ctl?{signal:ctl.signal}:{}).then(function(r){clearTimeout(t);return r.json()}).then(function(j){
+      if(!j||!j.ok){var e=(j&&j.error)||"no answer";
+        if(/unknown action/.test(e))e="Your Google bridge is not updated for truck routes yet.";
+        throw new Error("Route service: "+e)}
+      return j;
+    },function(e){clearTimeout(t);if(e&&/Route service|bridge/.test(e.message))throw e;throw new Error(navigator.onLine===false?"No internet.":"Could not reach the route service. Try again.")});
+  }
+
+  // ---- independent check: low bridges and weight limits near the route (OpenStreetMap) ----
+  function parseHeight(v){
+    v=String(v||"").trim().toLowerCase(); if(!v||/default|none|below|unsigned|no/.test(v))return null;
+    var m=v.match(/^(\d+)\s*(?:'|ft|’)\s*(?:(\d+)\s*(?:"|in|”)?)?/); if(m)return (+m[1]*12+(+(m[2]||0)))*0.0254;
+    m=v.match(/^(\d+(?:[.,]\d+)?)\s*(m)?$/); if(m)return +m[1].replace(",",".");
+    return null;
+  }
+  function parseWeight(v){
+    v=String(v||"").trim().toLowerCase(); if(!v||/default|none|no/.test(v))return null;
+    var m=v.match(/^(\d+(?:[.,]\d+)?)\s*(t|tonnes?)?$/); return m?+m[1].replace(",","."):null;
+  }
+  function simplify(pts,tol){ // Douglas-Peucker on [lon,lat], tolerance in metres
+    if(pts.length<3)return pts.slice();
+    var k=Math.cos(pts[0][1]*Math.PI/180)*111320, K=111320;
+    function d(p,a,b){var x=(p[0]-a[0])*k,y=(p[1]-a[1])*K,dx=(b[0]-a[0])*k,dy=(b[1]-a[1])*K,L=dx*dx+dy*dy,t=L?Math.max(0,Math.min(1,(x*dx+y*dy)/L)):0;return Math.hypot(x-t*dx,y-t*dy)}
+    var keep=new Uint8Array(pts.length),st=[[0,pts.length-1]];keep[0]=keep[pts.length-1]=1;
+    while(st.length){var s=st.pop(),i0=s[0],i1=s[1],mx=0,mi=-1;for(var i=i0+1;i<i1;i++){var dd=d(pts[i],pts[i0],pts[i1]);if(dd>mx){mx=dd;mi=i}}
+      if(mx>tol&&mi>0){keep[mi]=1;st.push([i0,mi],[mi,i1])}}
+    return pts.filter(function(p,i){return keep[i]});
+  }
+  function checkRoute(line,truck){
+    var tol=4, pts=simplify(line,tol); while(pts.length>350&&tol<40){tol*=1.6;pts=simplify(line,tol)}
+    var around="around:15,"+pts.map(function(p){return p[1].toFixed(5)+","+p[0].toFixed(5)}).join(",");
+    var q="[out:json][timeout:40];(way("+around+")[\"maxheight\"];node("+around+")[\"maxheight\"];way("+around+")[\"maxweight\"];node("+around+")[\"maxweight\"];);out center tags;";
+    var ctl=("AbortController" in window)?new AbortController():null, t=setTimeout(function(){if(ctl)ctl.abort()},45000);
+    return fetch("https://overpass-api.de/api/interpreter",Object.assign({method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}},ctl?{signal:ctl.signal}:{}))
+      .then(function(r){clearTimeout(t);if(!r.ok)throw new Error("check service busy");return r.json()}).then(function(j){
+        var out=[];
+        (j.elements||[]).forEach(function(e){
+          var tg=e.tags||{}, lat=e.lat!=null?e.lat:(e.center&&e.center.lat), lon=e.lon!=null?e.lon:(e.center&&e.center.lon); if(lat==null)return;
+          var name=tg.name||tg.ref||(tg.bridge?"bridge":tg.highway?"road":"point");
+          var h=parseHeight(tg.maxheight), w=parseWeight(tg.maxweight);
+          if(h!=null&&h<truck.height)out.push({lvl:"red",lat:lat,lon:lon,t:"Height limit "+tg.maxheight+(/'/.test(tg.maxheight)?"":" ("+ftin(h)+")")+" — lower than your truck",name:name});
+          else if(h!=null&&h<truck.height+0.3)out.push({lvl:"amber",lat:lat,lon:lon,t:"Height limit "+tg.maxheight+(/'/.test(tg.maxheight)?"":" ("+ftin(h)+")")+" — only just above your truck",name:name});
+          if(w!=null&&w<truck.weight)out.push({lvl:"red",lat:lat,lon:lon,t:"Weight limit "+tg.maxweight+(/t/.test(tg.maxweight)?"":" t")+" — less than your truck",name:name});
+        });
+        return out;
+      });
+  }
+
+  function draw(r,dest,from,saved){
+    $("trErr").textContent="";
+    var tk=r.truck||{height:3.9,weight:44};
+    $("trSum").innerHTML="<b>"+miles(r.distance)+" · "+mins(r.duration)+"</b> · planned for "+tk.height.toFixed(2)+" m ("+ftin(tk.height)+", with margin) and "+tk.weight+" t"+
+      (saved?"<br><span class='warnline'>Saved route from "+esc(new Date(saved).toLocaleString([], {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))+" — no fresh route now.</span>":"");
+    var ol=$("trSteps"); ol.innerHTML="";
+    (r.steps||[]).forEach(function(s){var li=document.createElement("li");li.innerHTML=esc(s[0])+(s[1]?" <span class='sd'>"+stepDist(s[1])+"</span>":"");ol.appendChild(li)});
+    return loadLeaflet().then(function(){
+      if(!map){
+        map=L.map("trMap",{zoomControl:true,attributionControl:true});
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map);
+      }
+      if(layer)layer.remove();
+      layer=L.layerGroup().addTo(map);
+      var ll=r.line.map(function(c){return [c[1],c[0]]});
+      var pl=L.polyline(ll,{color:"#0f5c4d",weight:6,opacity:.85}).addTo(layer);
+      L.circleMarker(ll[0],{radius:8,color:"#fff",weight:3,fillColor:"#1f6feb",fillOpacity:1}).bindPopup("Start (you)").addTo(layer);
+      L.circleMarker(ll[ll.length-1],{radius:9,color:"#fff",weight:3,fillColor:"#0f5c4d",fillOpacity:1}).bindPopup(esc(dest.name||"Destination")).addTo(layer);
+      setTimeout(function(){map.invalidateSize();map.fitBounds(pl.getBounds(),{padding:[24,24]})},60);
+    }).catch(function(){$("trErr").textContent="The map did not load (no internet?). The steps below still work."});
+  }
+
+  function showWarnings(list){
+    var box=$("trWarn"); box.innerHTML="";
+    if(list==null){box.innerHTML="<div class='chk'>Low-bridge check: not available right now. Watch the road signs.</div>";return}
+    var red=list.filter(function(w){return w.lvl==="red"}), amb=list.filter(function(w){return w.lvl==="amber"});
+    if(!red.length&&!amb.length){box.innerHTML="<div class='chk ok'>✓ Low-bridge check: no height or weight limit below your truck found along this route (OpenStreetMap). Road signs still come first.</div>"}
+    else{
+      var h="<div class='chk "+(red.length?"bad":"mid")+"'>"+(red.length?"⚠ "+red.length+" limit(s) below your truck are marked <b>near</b> this route. Check each on the map: the route may pass over it, not under it. If it goes under — do not use this route.":"Some limits are only just above your truck — take care.")+"</div><ul class='wl'>";
+      red.concat(amb).forEach(function(w,i){h+="<li class='"+w.lvl+"' data-i='"+i+"'>"+esc(w.t)+" · "+esc(w.name)+"</li>"});
+      box.innerHTML=h+"</ul>";
+      var all=red.concat(amb);
+      if(window.L&&map&&layer)all.forEach(function(w){L.circleMarker([w.lat,w.lon],{radius:9,color:"#fff",weight:2,fillColor:w.lvl==="red"?"#c62828":"#f9a825",fillOpacity:1}).bindPopup(esc(w.t)+"<br>"+esc(w.name)).addTo(layer)});
+      Array.prototype.forEach.call(box.querySelectorAll(".wl li"),function(li){li.onclick=function(){var w=all[+li.dataset.i];if(map){map.setView([w.lat,w.lon],17);$("trMap").scrollIntoView({block:"center",behavior:"smooth"})}}});
+    }
+  }
+
+  function openTruck(dest){
+    if(!cfg().url){$("tr").hidden=true;alertBox("Connect this phone to My places first (My places → Connect this phone).");return}
+    cur=dest; show(true);
+    $("trTitle").textContent="Truck route to "+(dest.name||"this point");
+    $("trSum").textContent=""; $("trSteps").innerHTML=""; $("trWarn").innerHTML=""; $("trErr").textContent="";
+    $("trStatus").textContent="Finding your position…";
+    getPos().then(function(from){
+      if(cur!==dest)return;
+      $("trStatus").textContent="Asking the route service for a truck route…";
+      return askRoute(from,dest).then(function(r){
+        if(cur!==dest)return;
+        LS.set("gf_truck_last",JSON.stringify({dest:dest,from:from,time:Date.now(),route:r}));
+        $("trStatus").textContent="Checking low bridges and weight limits along the route…";
+        return draw(r,dest,from,null).then(function(){
+          return checkRoute(r.line,r.truck||{height:3.9,weight:44}).then(function(w){if(cur===dest){showWarnings(w);$("trStatus").textContent=""}},
+            function(){if(cur===dest){showWarnings(null);$("trStatus").textContent=""}});
+        });
+      });
+    }).catch(function(e){
+      if(cur!==dest)return;
+      $("trStatus").textContent="";
+      var last=null; try{last=JSON.parse(LS.get("gf_truck_last")||"null")}catch(x){}
+      if(last&&last.route&&Math.abs(last.dest.lat-dest.lat)<1e-4&&Math.abs(last.dest.lon-dest.lon)<1e-4){
+        draw(last.route,dest,last.from,last.time).then(function(){$("trErr").textContent=e.message}); $("trErr").textContent=e.message; showWarnings(null);
+      } else $("trErr").textContent=e.message;
+    });
+  }
+  function alertBox(t){$("trTitle").textContent="Truck route";$("trSum").textContent="";$("trSteps").innerHTML="";$("trWarn").innerHTML="";$("trErr").textContent=t;$("trStatus").textContent="";show(true)}
+  window.GF_openTruck=openTruck;
+
+  $("truckHere").onclick=function(){var c=window.GF_CUR;if(!c)return;openTruck({lat:c.lat,lon:c.lon,name:(c.addr||c.pc||("X "+c.E+" Y "+c.N))})};
 })();
 
 </script>
