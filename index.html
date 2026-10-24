@@ -40,6 +40,34 @@ button,.btn{display:flex;align-items:center;justify-content:center;text-align:ce
 .two{display:flex;gap:10px}.two>*{flex:1}
 .two .btn{font-size:16px;white-space:nowrap;padding:0 8px}
 [hidden]{display:none!important}
+.mp-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mp-head h2{font-size:19px;margin:0}
+.mp-head .count{color:var(--muted);font-size:14px;font-weight:400}
+.linkbtn{background:none;border:0;color:var(--accent);font:600 15px/1.2 inherit;font-family:inherit;padding:6px 0;margin:0;width:auto;min-height:auto;cursor:pointer}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0 4px;-webkit-overflow-scrolling:touch}
+.chip{flex:0 0 auto;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:7px 12px;font:500 15px/1 inherit;font-family:inherit;width:auto;min-height:auto;margin:0;cursor:pointer}
+.chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.place{border-top:1px solid var(--line);padding:10px 0;display:flex;gap:10px;align-items:flex-start}
+.place:first-child{border-top:0}
+.place .info{flex:1;min-width:0;cursor:pointer}
+.place .nm{font-weight:600;font-size:17px;overflow-wrap:anywhere}
+.place .meta{font-size:13px;color:var(--muted);margin-top:2px}
+.place .note{font-size:14px;color:var(--ink);margin-top:4px;white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.place.open .note{display:block;-webkit-line-clamp:unset}
+.place .go{flex:0 0 auto;width:auto;min-height:44px;margin:0;padding:0 16px;font-size:16px}
+.nw{white-space:nowrap}
+.grp{display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 6px;margin-right:6px;color:var(--ink)}
+.empty{color:var(--muted);font-size:15px;padding:8px 0}
+.status{font-size:13px;color:var(--muted);margin-top:6px;min-height:1em}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50}
+.sheet .panel{background:var(--card);color:var(--ink);width:100%;max-width:520px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px 16px max(16px,env(safe-area-inset-bottom))}
+.panel h3{margin:0 0 10px;font-size:19px}
+.panel label{margin-top:10px}
+textarea{width:100%;font:17px/1.4 inherit;font-family:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);resize:vertical;min-height:90px}
+select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+.panel input{font-size:17px}
+.btn.danger{background:transparent;color:var(--err);border:1px solid var(--line)}
+.pt{font-size:14px;color:var(--muted);margin:4px 0 0}
 </style>
 </head>
 <body>
@@ -50,6 +78,17 @@ button,.btn{display:flex;align-items:center;justify-content:center;text-align:ce
     <button class="btn here" id="here" type="button">Where am I?</button>
     <div class="small">Uses the phone's location: shows X/Y, the nearest postcode and a message to send.</div>
     <div class="err" id="err3" role="alert"></div>
+  </div>
+
+  <div class="card" id="mp">
+    <div class="mp-head"><h2>My places <span class="count" id="mpCount"></span></h2><button class="linkbtn" id="mpAdd" type="button">+ Add place</button></div>
+    <div id="mpSetupHint" class="empty" hidden>Your places are kept in your Google sheet. <button class="linkbtn" id="mpSetupOpen" type="button">Set up</button></div>
+    <div id="mpBody" hidden>
+      <input id="mpSearch" type="search" autocomplete="off" placeholder="Search name, note, postcode" style="font-size:17px">
+      <div class="chips" id="mpChips"></div>
+      <div id="mpList"></div>
+      <div class="status" id="mpStatus"></div>
+    </div>
   </div>
 
   <div class="card">
@@ -84,6 +123,7 @@ button,.btn{display:flex;align-items:center;justify-content:center;text-align:ce
       <button class="btn plain" id="copy" type="button">Copy link</button>
     </div>
     <button class="btn plain" id="share" type="button" hidden>Share…</button>
+    <button class="btn plain" id="savePlace" type="button">☆ Save this place</button>
     <div class="small" id="acc"></div>
   </div>
 
@@ -92,9 +132,45 @@ button,.btn{display:flex;align-items:center;justify-content:center;text-align:ce
     <p><b>iPhone</b> (Safari or Chrome): tap Share <span aria-hidden="true">⬆</span> → <b>Add to Home Screen</b> → Add.</p>
     <p><b>Android</b> (Chrome): tap <b>⋮</b> → <b>Add to Home screen</b> or <b>Install app</b> → Install.</p>
     <p>Allow location when asked — it is needed only for “Where am I?”.</p>
+    <p><b>My places</b>: set up once on each phone (address + key from your Google sheet menu “Grid Finder → Show phone setup”). On iPhone the home-screen icon keeps its own settings, so set up inside the icon. <button class="linkbtn" id="mpSetupOpen2" type="button">Set up / change</button></p>
   </details>
   <div class="small">Works without signal for X/Y; the map and the postcode need internet. Accuracy: Ordnance Survey OSTN15 method, within about 0.2 m.</div>
 </main>
+<div class="sheet" id="pf" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="pfTitle">
+    <h3 id="pfTitle">Save place</h3>
+    <div class="pt" id="pfPoint"></div>
+    <label for="pfName">Name</label>
+    <input id="pfName" maxlength="200" autocomplete="off" placeholder="e.g. Coalville pumping station">
+    <label for="pfGroup">Group</label>
+    <select id="pfGroup"></select>
+    <input id="pfGroupNew" maxlength="60" autocomplete="off" placeholder="New group name" hidden style="margin-top:8px">
+    <label for="pfNote">Note</label>
+    <textarea id="pfNote" maxlength="2000" placeholder="e.g. Gate by the warehouse, key at security, code 1234"></textarea>
+    <div class="err" id="pfErr" role="alert"></div>
+    <button id="pfSave" type="button">Save</button>
+    <div class="two">
+      <a class="btn plain" id="pfGo" target="_blank" rel="noopener" hidden>Route</a>
+      <a class="btn plain" id="pfWa" target="_blank" rel="noopener" hidden>WhatsApp</a>
+    </div>
+    <button class="btn danger" id="pfDel" type="button" hidden>Delete place</button>
+    <button class="btn plain" id="pfCancel" type="button">Cancel</button>
+  </div>
+</div>
+<div class="sheet" id="sf" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sfTitle">
+    <h3 id="sfTitle">Set up My places</h3>
+    <div class="pt">Open your Google sheet “Grid Finder — My places” → menu <b>Grid Finder → Show phone setup</b>. Copy the address and the key here. Do it once on each phone.</div>
+    <label for="sfUrl">Address</label>
+    <input id="sfUrl" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
+    <label for="sfKey">Key</label>
+    <input id="sfKey" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="long code">
+    <div class="err" id="sfErr" role="alert"></div>
+    <button id="sfSave" type="button">Connect</button>
+    <button class="btn danger" id="sfForget" type="button">Disconnect this phone</button>
+    <button class="btn plain" id="sfCancel" type="button">Cancel</button>
+  </div>
+</div>
 <script>
 // OSGB36 National Grid (Easting/Northing) -> WGS84 lat/lon.
 // Step 1: inverse Transverse Mercator on Airy 1830 (OS National Grid parameters).
@@ -415,7 +491,8 @@ button,.btn{display:flex;align-items:center;justify-content:center;text-align:ce
 
   function show(latN,lonN,E,N,precise,accuracy){
     var lat=latN.toFixed(6), lon=lonN.toFixed(6);
-    cur={E:Math.round(E),N:Math.round(N),pc:null,pcDist:null};
+    cur={E:Math.round(E),N:Math.round(N),pc:null,pcDist:null,lat:latN,lon:lonN};
+    window.GF_CUR=cur;
     lastLink="https://www.google.com/maps/search/?api=1&query="+lat+","+lon;
     $("xy").textContent="X "+cur.E+"  Y "+cur.N;
     $("coords").textContent=lat+", "+lon;
@@ -444,6 +521,218 @@ button,.btn{display:flex;align-items:center;justify-content:center;text-align:ce
   }
   $("share").onclick=function(){ if(navigator.share) navigator.share({text:lastText}).catch(function(){}); };
 })();
+</script>
+<script>
+(function(){
+  // ---- My places: list kept in the owner's Google sheet via a small Google program (bridge) ----
+  var $=function(id){return document.getElementById(id)};
+  var LS={get:function(k){try{return localStorage.getItem(k)}catch(e){return null}},
+          set:function(k,v){try{localStorage.setItem(k,v)}catch(e){}},
+          del:function(k){try{localStorage.removeItem(k)}catch(e){}}};
+  var DEFAULT_GROUPS=["Work","Shopping","Hobby","Home","Other"];
+  var places=[], group="All", editing=null, pending=null, showAll=false, LIMIT=6;
+
+  function cfg(){return {url:LS.get("gf_bridge_url")||"",key:LS.get("gf_bridge_key")||""}}
+  function ready(){var c=cfg();return !!(c.url&&c.key)}
+  function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]})}
+  function routeUrl(p){return "https://www.google.com/maps/dir/?api=1&destination="+(+p.lat).toFixed(6)+","+(+p.lon).toFixed(6)+"&travelmode=driving"}
+  function mapUrl(p){return "https://www.google.com/maps/search/?api=1&query="+(+p.lat).toFixed(6)+","+(+p.lon).toFixed(6)}
+  function waText(p){
+    var t=p.name;
+    if(p.easting!==""&&p.easting!=null)t+=" — X "+Math.round(p.easting)+", Y "+Math.round(p.northing);
+    if(p.postcode)t+=", "+p.postcode;
+    if(p.note)t+="\n"+p.note;
+    return "https://wa.me/?text="+encodeURIComponent(t+"\n"+mapUrl(p));
+  }
+  function status(t){$("mpStatus").textContent=t||""}
+
+  function call(action,payload){
+    var c=cfg();
+    if(!c.url||!c.key)return Promise.reject(new Error("not set up"));
+    var ctl=("AbortController" in window)?new AbortController():null;
+    var timer=setTimeout(function(){if(ctl)ctl.abort()},20000);
+    var req = action==="list"
+      ? fetch(c.url+(c.url.indexOf("?")<0?"?":"&")+"action=list&key="+encodeURIComponent(c.key)+"&t="+Date.now(),ctl?{signal:ctl.signal}:{})
+      : fetch(c.url,Object.assign({method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({key:c.key,action:action},payload))},ctl?{signal:ctl.signal}:{}));
+    return req.then(function(r){clearTimeout(timer);return r.text()}).then(function(txt){
+      var j; try{j=JSON.parse(txt)}catch(e){throw new Error("The address does not answer like Grid Finder's sheet. Check the address.")}
+      if(!j.ok)throw new Error(j.error==="wrong key"?"Wrong key. Copy it again from the sheet menu.":(j.error||"Error"));
+      return j;
+    },function(e){clearTimeout(timer);throw new Error(navigator.onLine===false?"No internet. Showing the saved copy.":"Could not reach your sheet. Try again.")});
+  }
+
+  function groupsAll(){
+    var s={}; DEFAULT_GROUPS.forEach(function(g){s[g]=1});
+    places.forEach(function(p){if(p.group)s[p.group]=1});
+    return Object.keys(s);
+  }
+
+  function render(){
+    var on=ready();
+    $("mpSetupHint").hidden=on; $("mpBody").hidden=!on;
+    $("mpCount").textContent=on&&places.length?"("+places.length+")":"";
+    if(!on)return;
+    // chips: All + groups that have places
+    var used={}; places.forEach(function(p){used[p.group||"Other"]=(used[p.group||"Other"]||0)+1});
+    var names=Object.keys(used).sort(function(a,b){var ia=DEFAULT_GROUPS.indexOf(a),ib=DEFAULT_GROUPS.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b)});
+    if(group!=="All"&&!used[group])group="All";
+    var ch=$("mpChips"); ch.innerHTML="";
+    ["All"].concat(names).forEach(function(g){
+      var b=document.createElement("button"); b.type="button"; b.className="chip"+(g===group?" on":"");
+      b.textContent=g==="All"?"All ("+places.length+")":g+" ("+used[g]+")";
+      b.onclick=function(){group=g;render()}; ch.appendChild(b);
+    });
+    ch.hidden=places.length===0;
+    var q=$("mpSearch").value.trim().toLowerCase();
+    var list=places.filter(function(p){
+      if(group!=="All"&&(p.group||"Other")!==group)return false;
+      if(!q)return true;
+      return (p.name+" "+(p.note||"")+" "+(p.postcode||"")+" "+(p.group||"")).toLowerCase().indexOf(q)>=0;
+    }).sort(function(a,b){return String(a.name).localeCompare(String(b.name))});
+    var box=$("mpList"); box.innerHTML="";
+    if(!places.length){box.innerHTML='<div class="empty">No places yet. Tap “+ Add place”, or find a point and tap “☆ Save this place”.</div>';return}
+    if(!list.length){box.innerHTML='<div class="empty">Nothing found.</div>';return}
+    var total=list.length, cut=!q&&group==="All"&&!showAll&&total>LIMIT;
+    if(cut)list=list.slice(0,LIMIT);
+    list.forEach(function(p){
+      var row=document.createElement("div"); row.className="place";
+      var meta=[]; meta.push('<span class="grp">'+esc(p.group||"Other")+'</span>');
+      if(p.postcode)meta.push('<span class="nw">'+esc(p.postcode)+'</span>');
+      if(p.easting!==""&&p.easting!=null)meta.push('<span class="nw">X '+Math.round(p.easting)+' Y '+Math.round(p.northing)+'</span>');
+      row.innerHTML='<div class="info"><div class="nm">'+esc(p.name)+'</div><div class="meta">'+meta.join(" · ")+'</div>'+(p.note?'<div class="note">'+esc(p.note)+'</div>':'')+'</div>'+
+        '<a class="btn go" target="_blank" rel="noopener" href="'+routeUrl(p)+'" aria-label="Route to '+esc(p.name)+'">Go</a>';
+      row.querySelector(".info").onclick=function(){ if(p.note&&!row.classList.contains("open")){row.classList.add("open");return} openForm(p) };
+      box.appendChild(row);
+    });
+    if(cut){var m=document.createElement("button");m.type="button";m.className="btn plain";m.textContent="Show all "+total+" places";m.onclick=function(){showAll=true;render()};box.appendChild(m)}
+    else if(showAll&&!q&&group==="All"&&total>LIMIT){var l=document.createElement("button");l.type="button";l.className="linkbtn";l.textContent="Show fewer";l.onclick=function(){showAll=false;render();$("mp").scrollIntoView({block:"start"})};box.appendChild(l)}
+  }
+
+  function loadCache(){try{places=JSON.parse(LS.get("gf_places_cache")||"[]")||[]}catch(e){places=[]}}
+  function saveCache(){LS.set("gf_places_cache",JSON.stringify(places));LS.set("gf_places_time",new Date().toISOString())}
+  function refresh(){
+    if(!ready()){render();return Promise.resolve()}
+    status("Updating…");
+    return call("list").then(function(j){
+      places=(j.places||[]).map(function(p){p.lat=+p.lat;p.lon=+p.lon;return p}).filter(function(p){return isFinite(p.lat)&&isFinite(p.lon)});
+      saveCache(); render(); status("Up to date · "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}));
+    }).catch(function(e){render();var t=LS.get("gf_places_time");status(e.message+(t?" (saved copy from "+new Date(t).toLocaleString([], {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+")":""))});
+  }
+
+  // ---- place form ----
+  function fillGroups(sel){
+    var g=$("pfGroup"); g.innerHTML="";
+    groupsAll().forEach(function(n){var o=document.createElement("option");o.value=n;o.textContent=n;g.appendChild(o)});
+    var o=document.createElement("option");o.value="__new";o.textContent="+ New group…";g.appendChild(o);
+    g.value=sel&&groupsAll().indexOf(sel)>=0?sel:(group!=="All"?group:"Work");
+    $("pfGroupNew").hidden=true; $("pfGroupNew").value="";
+  }
+  $("pfGroup").onchange=function(){var n=this.value==="__new";$("pfGroupNew").hidden=!n;if(n)$("pfGroupNew").focus()};
+
+  function pointText(p){
+    var t=[];
+    if(p.easting!==""&&p.easting!=null)t.push("X "+Math.round(p.easting)+"  Y "+Math.round(p.northing));
+    if(p.postcode)t.push(p.postcode);
+    t.push((+p.lat).toFixed(5)+", "+(+p.lon).toFixed(5));
+    return t.join(" · ");
+  }
+
+  function openForm(p){
+    if(!ready()){openSetup();return}
+    editing=p||null; $("pfErr").textContent="";
+    var src=p||pending;
+    $("pfTitle").textContent=p?"Place":"Save place";
+    $("pfName").value=p?p.name:""; $("pfNote").value=p?(p.note||""):"";
+    fillGroups(p?p.group:null);
+    $("pfPoint").textContent=src?pointText(src):"";
+    $("pfDel").hidden=!p; $("pfGo").hidden=!p; $("pfWa").hidden=!p;
+    if(p){$("pfGo").href=routeUrl(p);$("pfWa").href=waText(p)}
+    $("pfSave").disabled=false; $("pfSave").textContent=p?"Save changes":"Save";
+    $("pf").hidden=false;
+    if(!p)setTimeout(function(){$("pfName").focus()},50);
+  }
+  function closeForm(){$("pf").hidden=true;editing=null;pending=null}
+  $("pfCancel").onclick=closeForm;
+  $("pf").addEventListener("click",function(e){if(e.target===this)closeForm()});
+
+  $("pfSave").onclick=function(){
+    var name=$("pfName").value.trim(); if(!name){$("pfErr").textContent="Please type a name.";$("pfName").focus();return}
+    var g=$("pfGroup").value; if(g==="__new"){g=$("pfGroupNew").value.trim(); if(!g){$("pfErr").textContent="Type the new group name.";return}}
+    var src=editing||pending; if(!src){$("pfErr").textContent="No point to save.";return}
+    var place={id:editing?editing.id:undefined,name:name,group:g,note:$("pfNote").value.trim(),
+      postcode:src.postcode||"",easting:src.easting,northing:src.northing,lat:src.lat,lon:src.lon};
+    var b=this; b.disabled=true; b.textContent="Saving…"; $("pfErr").textContent="";
+    call("save",{place:place}).then(function(j){
+      place.id=j.id;
+      var i=places.findIndex(function(x){return x.id===j.id}); if(i>=0)places[i]=Object.assign({},places[i],place); else places.push(place);
+      saveCache(); closeForm(); render(); status("Saved ✓"); refresh();
+    }).catch(function(e){b.disabled=false;b.textContent=editing?"Save changes":"Save";$("pfErr").textContent=e.message});
+  };
+
+  $("pfDel").onclick=function(){
+    var b=this;
+    if(b.dataset.sure!=="1"){b.dataset.sure="1";b.textContent="Tap again to delete (kept in the sheet’s “Deleted” tab)";setTimeout(function(){b.dataset.sure="";b.textContent="Delete place"},4000);return}
+    b.dataset.sure=""; var id=editing.id; b.disabled=true;
+    call("delete",{id:id}).then(function(){places=places.filter(function(x){return x.id!==id});saveCache();b.disabled=false;b.textContent="Delete place";closeForm();render();status("Deleted ✓")})
+      .catch(function(e){b.disabled=false;b.textContent="Delete place";$("pfErr").textContent=e.message});
+  };
+
+  // Save from the result card (current point)
+  $("savePlace").onclick=function(){
+    var c=window.GF_CUR; if(!c)return;
+    pending={lat:c.lat,lon:c.lon,easting:c.E,northing:c.N,postcode:c.pc||""};
+    openForm(null);
+  };
+  // "+ Add place": use the shown point, or the phone's location
+  $("mpAdd").onclick=function(){
+    if(!ready()){openSetup();return}
+    var c=window.GF_CUR;
+    if(c&&!$("result").hidden){$("savePlace").onclick();return}
+    status("Finding your position…");
+    $("here").click();
+    var tries=0, iv=setInterval(function(){
+      tries++;
+      if(window.GF_CUR&&!$("result").hidden){clearInterval(iv);status("");setTimeout(function(){$("savePlace").onclick()},400)}
+      else if(tries>50||$("err3").textContent){clearInterval(iv);status("Could not get the position. Find the point first (X/Y, pin or Where am I?), then tap ☆ Save this place.")}
+    },500);
+  };
+
+  // ---- setup ----
+  function openSetup(){var c=cfg();$("sfUrl").value=c.url;$("sfKey").value=c.key;$("sfErr").textContent="";$("sfForget").hidden=!ready();$("sf").hidden=false}
+  $("mpSetupOpen").onclick=openSetup; $("mpSetupOpen2").onclick=openSetup;
+  $("sfCancel").onclick=function(){$("sf").hidden=true};
+  $("sf").addEventListener("click",function(e){if(e.target===this)this.hidden=true});
+  $("sfSave").onclick=function(){
+    var u=$("sfUrl").value.trim(), k=$("sfKey").value.trim();
+    if(!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u)){$("sfErr").textContent="The address should look like https://script.google.com/macros/s/…/exec";return}
+    if(k.length<20){$("sfErr").textContent="The key looks too short. Copy it again.";return}
+    var oldU=LS.get("gf_bridge_url"), oldK=LS.get("gf_bridge_key");
+    LS.set("gf_bridge_url",u); LS.set("gf_bridge_key",k);
+    var b=this; b.disabled=true; b.textContent="Checking…";
+    call("list").then(function(j){
+      b.disabled=false;b.textContent="Connect";$("sf").hidden=true;
+      places=(j.places||[]).map(function(p){p.lat=+p.lat;p.lon=+p.lon;return p});saveCache();render();status("Connected ✓");
+    }).catch(function(e){
+      if(oldU)LS.set("gf_bridge_url",oldU);else LS.del("gf_bridge_url");
+      if(oldK)LS.set("gf_bridge_key",oldK);else LS.del("gf_bridge_key");
+      b.disabled=false;b.textContent="Connect";$("sfErr").textContent=e.message;
+    });
+  };
+  $("sfForget").onclick=function(){
+    var b=this;
+    if(b.dataset.sure!=="1"){b.dataset.sure="1";b.textContent="Tap again: remove address, key and saved copy from this phone";setTimeout(function(){b.dataset.sure="";b.textContent="Disconnect this phone"},4000);return}
+    ["gf_bridge_url","gf_bridge_key","gf_places_cache","gf_places_time"].forEach(LS.del);
+    places=[];b.dataset.sure="";b.textContent="Disconnect this phone";$("sf").hidden=true;render();
+  };
+
+  $("mpSearch").addEventListener("input",render);
+  document.addEventListener("keydown",function(e){if(e.key==="Escape"){if(!$("pf").hidden)closeForm();$("sf").hidden=true}});
+  window.addEventListener("online",function(){refresh()});
+  document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")refresh()});
+
+  loadCache(); render(); refresh();
+})();
+
 </script>
 </body>
 </html>
