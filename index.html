@@ -92,6 +92,8 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 .chk.ok{border-color:#2e7d32}.chk.bad{border-color:#c62828;background:rgba(198,40,40,.08)}.chk.mid{border-color:#f9a825;background:rgba(249,168,37,.1)}
 .wl{margin:6px 0;padding-left:20px;font-size:15px}.wl li{padding:5px 0;cursor:pointer}.wl li.red{color:var(--err)}
 .warnline{color:var(--err)}
+.alist{margin-top:6px}.alist button{display:block;width:100%;min-height:0;margin:6px 0 0;padding:10px 12px;text-align:left;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:10px;font-weight:500;font-size:16px;line-height:1.3}
+.alist .am{display:block;font-size:13px;color:var(--muted);font-weight:400;margin-top:2px}
 .ic{width:22px;height:22px;margin-right:8px;flex:0 0 auto}.place .tk .ic{margin:0}
 .w3w{border-top:1px solid var(--line);margin-top:10px;padding-top:4px}
 .drv{position:relative;background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:12px 14px;margin:8px 0}
@@ -131,6 +133,13 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     <button class="btn here" id="here" type="button">Where am I?</button>
     <div class="small">Uses the phone's location: shows X/Y, the nearest postcode and street address, and a message to send.</div>
     <div class="err" id="err3" role="alert"></div>
+  </div>
+  <div class="card">
+    <label for="adr">Address or postcode</label>
+    <input id="adr" autocomplete="off" spellcheck="false" placeholder="e.g. Dover Street, Leicester" style="font-size:19px">
+    <button id="adrGo" type="button">Find address</button>
+    <div class="err" id="errA" role="alert"></div>
+    <div class="alist" id="adrList"></div>
   </div>
 
   <div class="card">
@@ -241,6 +250,18 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     </div>
     <ol id="trSteps" class="steps"></ol>
     <div class="small">Backup route for your truck (height and weight limits), from openrouteservice and OpenStreetMap data. Not every bridge is in the data — <b>road signs always come first</b>. Start = where the phone is now.</div>
+  </div>
+</div>
+<div class="sheet" id="ap" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="apTitle">
+    <h3 id="apTitle">Add a place</h3>
+    <label for="apQ">Address or postcode</label>
+    <input id="apQ" autocomplete="off" spellcheck="false" placeholder="e.g. Dover Street, Leicester" style="font-size:19px">
+    <button id="apGo" type="button">Find address</button>
+    <div class="err" id="apErr" role="alert"></div>
+    <div class="alist" id="apList"></div>
+    <button class="btn plain" id="apHere" type="button">Use where I am now</button>
+    <button class="btn plain" id="apCancel" type="button">Cancel</button>
   </div>
 </div>
 <div class="sheet" id="sf" hidden>
@@ -654,6 +675,64 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     }
   }
 
+  // ---- find a typed address or postcode (Google through your bridge when available, otherwise postcodes.io / OpenStreetMap) ----
+  function getJSON(u,ms){
+    var ctl=("AbortController" in window)?new AbortController():null, t=setTimeout(function(){if(ctl)ctl.abort()},ms||12000);
+    return fetch(u,ctl?{signal:ctl.signal}:{}).then(function(r){clearTimeout(t);return r.json()},function(e){clearTimeout(t);throw e});
+  }
+  function okPoint(la,lo){return isFinite(la)&&isFinite(lo)&&GF.inGB(la,lo)&&!GF.isIreland(la,lo)}
+  function withGrid(r){var g=GF.wgs84ToGrid(r.lat,r.lon);r.E=Math.round(g.E);r.N=Math.round(g.N);r.precise=g.precise;return r}
+  function searchAddress(q){
+    q=String(q||"").trim(); if(!q)return Promise.reject(new Error("Type an address or a postcode first."));
+    if(navigator.onLine===false)return Promise.reject(new Error("Needs internet."));
+    var pcm=q.toUpperCase().replace(/\s+/g," ").match(/^([A-Z]{1,2}\d[A-Z\d]?) ?(\d[A-Z]{2})$/);
+    if(pcm){
+      return getJSON("https://api.postcodes.io/postcodes/"+encodeURIComponent(pcm[1]+pcm[2])).then(function(j){
+        if(!j||!j.result)throw new Error("Postcode not found.");
+        var r=j.result; return [withGrid({label:r.postcode,meta:[r.admin_ward,r.admin_district].filter(Boolean).join(", "),lat:r.latitude,lon:r.longitude,postcode:r.postcode,exact:false})];
+      });
+    }
+    var bu="",bk=""; try{bu=localStorage.getItem("gf_bridge_url")||"";bk=localStorage.getItem("gf_bridge_key")||""}catch(e){}
+    function osm(){
+      return getJSON("https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=gb&limit=6&accept-language=en&q="+encodeURIComponent(q)).then(function(j){
+        var out=[]; (j||[]).forEach(function(x){
+          var la=+x.lat, lo=+x.lon; if(!okPoint(la,lo))return;
+          var a=x.address||{}, line=addrLine(a)||String(x.display_name||"").split(",").slice(0,2).join(",");
+          out.push(withGrid({label:line,meta:[a.postcode,a.county||a.state_district||""].filter(Boolean).join(" · "),lat:la,lon:lo,postcode:a.postcode||"",exact:!!a.house_number}));
+        });
+        return out;
+      });
+    }
+    if(bu&&bk){
+      return getJSON(bu+"?action=geocode&q="+encodeURIComponent(q)+"&key="+encodeURIComponent(bk),15000).then(function(j){
+        if(!j||!j.ok||!j.results)throw 0;
+        var out=j.results.filter(function(r){return okPoint(+r.lat,+r.lon)}).map(function(r){return withGrid({label:r.address,meta:r.exact?"exact address":"approximate",lat:+r.lat,lon:+r.lon,postcode:r.postcode||"",exact:!!r.exact})});
+        if(!out.length)throw 0; return out;
+      }).catch(function(){return osm()});
+    }
+    return osm();
+  }
+  window.GF_searchAddress=searchAddress;
+  function listResults(box,res,onPick){
+    box.innerHTML="";
+    res.forEach(function(r){var b=document.createElement("button");b.type="button";
+      b.innerHTML=esc(r.label)+'<span class="am">'+esc((r.meta?r.meta+" · ":"")+"X "+r.E+" Y "+r.N+(r.exact?"":" · street / area, check the map"))+'</span>';
+      b.onclick=function(){onPick(r)};box.appendChild(b)});
+  }
+  window.GF_listResults=listResults;
+  function esc(t){return String(t==null?"":t).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]})}
+  function finderSearch(){
+    var e=$("errA"), box=$("adrList"), btn=$("adrGo"); e.textContent=""; box.innerHTML="";
+    btn.disabled=true; btn.textContent="Searching…";
+    searchAddress($("adr").value).then(function(res){
+      btn.disabled=false; btn.textContent="Find address";
+      if(!res.length){e.textContent="Nothing found. Try adding the town, or use the postcode.";return}
+      listResults(box,res,function(r){box.innerHTML="";eIn.value=String(r.E);nIn.value=String(r.N);window.GF_lastLabel=r.label;show(r.lat,r.lon,r.E,r.N,r.precise);window.GF_lastLabelFor=window.GF_CUR});
+    },function(x){btn.disabled=false;btn.textContent="Find address";e.textContent=(x&&x.message)||"Could not search now. Try again."});
+  }
+  $("adrGo").onclick=finderSearch;
+  $("adr").addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();finderSearch()}});
+
   function show(latN,lonN,E,N,precise,accuracy){
     var lat=latN.toFixed(6), lon=lonN.toFixed(6);
     cur={E:Math.round(E),N:Math.round(N),pc:null,pcDist:null,addr:null,w3w:null,lat:latN,lon:lonN}; resetW3w();
@@ -689,7 +768,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 })();
 </script>
 <script>
-window.GF_VERSION="3.12";
+window.GF_VERSION="3.13";
 (function(){
   // ---- My places: list kept in the owner's Google sheet via a small Google program (bridge) ----
   var $=function(id){return document.getElementById(id)};
@@ -853,11 +932,38 @@ window.GF_VERSION="3.12";
     var c=window.GF_CUR; if(!c)return;
     pending={lat:c.lat,lon:c.lon,easting:c.E,northing:c.N,postcode:c.pc||"",w3w:c.w3w||""};
     openForm(null);
+    if(window.GF_lastLabel&&window.GF_lastLabelFor===c){$("pfName").value=window.GF_lastLabel}
   };
-  // "+ Add place" (in My places): save where the phone is now
-  $("mpAdd").onclick=function(){
+  // "+ Add place": type an address / postcode, or use where the phone is now
+  function openAdd(){
     if(!ready()){openSetup();return}
-    var before=window.GF_CUR, btn=this; btn.disabled=true; status("Finding your position…");
+    $("apErr").textContent="";$("apList").innerHTML="";$("ap").hidden=false;setTimeout(function(){$("apQ").focus()},50);
+  }
+  function closeAdd(){$("ap").hidden=true}
+  $("mpAdd").onclick=openAdd;
+  $("apCancel").onclick=closeAdd;
+  $("ap").addEventListener("click",function(e){if(e.target===this)closeAdd()});
+  function addSearch(){
+    var e=$("apErr"), box=$("apList"), btn=$("apGo"); e.textContent=""; box.innerHTML="";
+    if(!window.GF_searchAddress)return;
+    btn.disabled=true; btn.textContent="Searching…";
+    window.GF_searchAddress($("apQ").value).then(function(res){
+      btn.disabled=false; btn.textContent="Find address";
+      if(!res.length){e.textContent="Nothing found. Try adding the town, or use the postcode.";return}
+      window.GF_listResults(box,res,function(r){
+        closeAdd();
+        pending={lat:r.lat,lon:r.lon,easting:r.E,northing:r.N,postcode:r.postcode||"",w3w:""};
+        openForm(null);
+        $("pfName").value=r.label||"";
+        setTimeout(function(){var n=$("pfName");n.focus();try{n.select()}catch(x){}},80);
+      });
+    },function(x){btn.disabled=false;btn.textContent="Find address";e.textContent=(x&&x.message)||"Could not search now. Try again."});
+  }
+  $("apGo").onclick=addSearch;
+  $("apQ").addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();addSearch()}});
+  $("apHere").onclick=function(){
+    closeAdd();
+    var before=window.GF_CUR, btn=$("mpAdd"); btn.disabled=true; status("Finding your position…");
     $("err3").textContent=""; $("here").click();
     var tries=0, iv=setInterval(function(){
       tries++;
@@ -929,7 +1035,7 @@ window.GF_VERSION="3.12";
   };
 
   $("mpSearch").addEventListener("input",render);
-  document.addEventListener("keydown",function(e){if(e.key==="Escape"){if(!$("pf").hidden)closeForm();$("sf").hidden=true}});
+  document.addEventListener("keydown",function(e){if(e.key==="Escape"){if(!$("pf").hidden)closeForm();$("sf").hidden=true;$("ap").hidden=true}});
   window.addEventListener("online",function(){refresh()});
   document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")refresh()});
 
