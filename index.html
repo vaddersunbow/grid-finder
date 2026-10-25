@@ -86,6 +86,12 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 .chk.ok{border-color:#2e7d32}.chk.bad{border-color:#c62828;background:rgba(198,40,40,.08)}.chk.mid{border-color:#f9a825;background:rgba(249,168,37,.1)}
 .wl{margin:6px 0;padding-left:20px;font-size:15px}.wl li{padding:5px 0;cursor:pointer}.wl li.red{color:var(--err)}
 .warnline{color:var(--err)}
+.drv{position:relative;background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:12px 14px;margin:8px 0}
+.drv .nx{font-size:22px;font-weight:700;line-height:1.25}
+.drv .nxd{font-size:16px;opacity:.9;margin-top:4px}
+.drv .btn{margin-top:8px;background:var(--card);border-color:transparent}
+.drvb{display:flex;gap:8px}.drvb .btn{flex:1;min-height:44px}
+.trs.driving .trmap{height:calc(100vh - 250px);height:calc(100dvh - 250px);min-height:300px;margin-top:6px}
 .place .go.tk{padding:0 12px}
 
 </style>
@@ -196,8 +202,18 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     <div class="pt" id="trSum"></div>
     <div class="pt" id="trStatus"></div>
     <div class="err" id="trErr" role="alert"></div>
+    <div id="trDriving" class="drv" hidden>
+      <div class="nx" id="trNext"></div>
+      <div class="nxd" id="trNextD"></div>
+      <div id="trOffBox" hidden><button class="btn plain" id="trRebuild" type="button">Rebuild route from here</button></div>
+      <div class="drvb"><button class="btn plain" id="trRecentre" type="button" hidden>Re-centre</button><button class="btn danger" id="trStop" type="button">■ Stop</button></div>
+    </div>
     <div id="trMap" class="trmap"></div>
     <div id="trWarn"></div>
+    <div id="trDriveBox" hidden>
+      <button id="trDrive" type="button">▶ Start driving (voice)</button>
+      <div class="pt">Grid Finder follows you on the map and speaks each turn. Keep it open on the screen (phone on charge). Works without internet once the route is built.</div>
+    </div>
     <ol id="trSteps" class="steps"></ol>
     <div class="small">Backup route for your truck (height and weight limits), from openrouteservice and OpenStreetMap data. Not every bridge is in the data — <b>road signs always come first</b>. Start = where the phone is now.</div>
   </div>
@@ -621,7 +637,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 })();
 </script>
 <script>
-window.GF_VERSION="3.8";
+window.GF_VERSION="3.9";
 (function(){
   // ---- My places: list kept in the owner's Google sheet via a small Google program (bridge) ----
   var $=function(id){return document.getElementById(id)};
@@ -937,7 +953,7 @@ window.GF_VERSION="3.8";
   var $=function(id){return document.getElementById(id)};
   var LS={get:function(k){try{return localStorage.getItem(k)}catch(e){return null}},
           set:function(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
-  var map=null, layer=null, cur=null;
+  var map=null, layer=null, cur=null, shown=null;
   function cfg(){return {url:LS.get("gf_bridge_url")||"",key:LS.get("gf_bridge_key")||""}}
   function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]})}
   function miles(m){var mi=m/1609.344;return mi>=10?mi.toFixed(0)+" mi":mi.toFixed(1)+" mi"}
@@ -946,7 +962,7 @@ window.GF_VERSION="3.8";
   function ftin(m){var i=Math.round(m/0.0254);return Math.floor(i/12)+"'"+(i%12)+'"'}
 
   function show(on){$("tr").hidden=!on; document.body.style.overflow=on?"hidden":""}
-  $("trClose").onclick=function(){show(false)};
+  $("trClose").onclick=function(){if(window.GF_stopDrive)window.GF_stopDrive(true);show(false)};
   document.addEventListener("keydown",function(e){if(e.key==="Escape"&&!$("tr").hidden)show(false)});
 
   function loadLeaflet(){
@@ -1020,7 +1036,7 @@ window.GF_VERSION="3.8";
   }
 
   function draw(r,dest,from,saved){
-    $("trErr").textContent="";
+    $("trErr").textContent=""; shown={route:r,dest:dest}; $("trDriveBox").hidden=false;
     var tk=r.truck||{height:3.9,weight:44};
     $("trSum").innerHTML="<b>"+miles(r.distance)+" · "+mins(r.duration)+"</b> · planned for "+tk.height.toFixed(2)+" m ("+ftin(tk.height)+", with margin) and "+tk.weight+" t"+
       (saved?"<br><span class='warnline'>Saved route from "+esc(new Date(saved).toLocaleString([], {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))+" — no fresh route now.</span>":"");
@@ -1030,6 +1046,8 @@ window.GF_VERSION="3.8";
       if(!map){
         map=L.map("trMap",{zoomControl:true,attributionControl:true});
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map);
+        window.GF_trMap=map;
+        map.on("dragstart",function(){if(drv){drv.follow=false;$("trRecentre").hidden=false}});
       }
       if(layer)layer.remove();
       layer=L.layerGroup().addTo(map);
@@ -1056,11 +1074,104 @@ window.GF_VERSION="3.8";
     }
   }
 
+
+  // ---- Drive mode: follows the phone's position along the route and speaks the turns ----
+  var drv=null;
+  function hav(a,b){var r=Math.PI/180,x=(b[0]-a[0])*r*Math.cos((a[1]+b[1])/2*r),y=(b[1]-a[1])*r;return Math.sqrt(x*x+y*y)*6371000}
+  function say(t){
+    try{if(!window.speechSynthesis)return;speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(t);u.lang="en-GB";u.rate=1;speechSynthesis.speak(u)}catch(e){}
+    if(window.GF_spoken)window.GF_spoken.push(t);
+  }
+  function spokenDist(m){
+    if(m>=1400)return "In "+(Math.round(m/1609.344*2)/2)+" miles";
+    if(m>=700)return "In half a mile";
+    if(m>=350)return "In a quarter of a mile";
+    return "In "+Math.max(50,Math.round(m*1.0936/50)*50)+" yards";
+  }
+  function lc(t){return t?t.charAt(0).toLowerCase()+t.slice(1):t}
+  function wake(){
+    if(!drv||!navigator.wakeLock||!navigator.wakeLock.request)return;
+    navigator.wakeLock.request("screen").then(function(l){if(drv)drv.lock=l;else l.release()}).catch(function(){});
+  }
+  document.addEventListener("visibilitychange",function(){if(drv&&document.visibilityState==="visible")wake()});
+
+  function startDrive(){
+    if(!shown||drv)return;
+    var r=shown.route, L=r.line, cum=[0];
+    for(var i=1;i<L.length;i++)cum.push(cum[i-1]+hav(L[i-1],L[i]));
+    // manoeuvres = start of each step after the first (the first step is "Head …")
+    var man=(r.steps||[]).map(function(s,i){return {i:Math.max(0,Math.min(L.length-1,s[3]||0)),t:s[0],far:false,near:false,first:i===0}});
+    drv={L:L,cum:cum,man:man,idx:0,off:0,follow:true,watch:null,lock:null,dot:null,acc:null,arrived:false,lastFix:0};
+    $("trDriveBox").hidden=true; $("trDriving").hidden=false; $("trNext").textContent="Waiting for your position…"; $("trNextD").textContent="";
+    say("Starting truck route. Keep Grid Finder open on the screen.");
+    wake();
+    $("tr").classList.add("driving");
+    if(map){setTimeout(function(){map.invalidateSize();map.setZoom(17)},50)}
+    setTimeout(function(){var y=$("trDriving").getBoundingClientRect().top+$("tr").scrollTop-52;$("tr").scrollTo({top:y,behavior:"smooth"})},80);
+    if(!navigator.geolocation){$("trNext").textContent="This phone cannot share location.";return}
+    drv.watch=navigator.geolocation.watchPosition(onFix,function(e){if(drv)$("trNext").textContent=e&&e.code===1?"Location is blocked. Allow location for Grid Finder.":"No GPS signal yet…"},{enableHighAccuracy:true,maximumAge:0,timeout:30000});
+  }
+  function stopDrive(silent){
+    if(!drv)return;
+    try{if(drv.watch!=null)navigator.geolocation.clearWatch(drv.watch)}catch(e){}
+    try{if(drv.lock)drv.lock.release()}catch(e){}
+    try{if(drv.dot)drv.dot.remove();if(drv.acc)drv.acc.remove()}catch(e){}
+    try{if(window.speechSynthesis)speechSynthesis.cancel()}catch(e){}
+    drv=null; $("tr").classList.remove("driving"); if(map)setTimeout(function(){map.invalidateSize()},50); $("trDriving").hidden=true; $("trRecentre").hidden=true; if(shown)$("trDriveBox").hidden=false;
+    if(!silent)say("Truck route stopped.");
+  }
+  window.GF_stopDrive=stopDrive;
+
+  function project(p){ // nearest point on the route near the last known place (does not jump back to earlier parts)
+    var L=drv.L, best={d:1e9,seg:drv.idx,t:0}, from=Math.max(0,drv.idx-3), to=L.length-1;
+    var k=Math.cos(p[1]*Math.PI/180)*111320, K=111320;
+    for(var i=from;i<to;i++){
+      var a=L[i],b=L[i+1],dx=(b[0]-a[0])*k,dy=(b[1]-a[1])*K,x=(p[0]-a[0])*k,y=(p[1]-a[1])*K,len=dx*dx+dy*dy,t=len?Math.max(0,Math.min(1,(x*dx+y*dy)/len)):0,d=Math.hypot(x-t*dx,y-t*dy);
+      if(d<best.d){best={d:d,seg:i,t:t}}
+      if(drv.cum[i]-drv.cum[from]>3000&&best.d<30)break; // close match found, stop searching far ahead
+    }
+    return best;
+  }
+  function onFix(pos){
+    if(!drv)return;
+    var p=[pos.coords.longitude,pos.coords.latitude], acc=pos.coords.accuracy||0, ll=[p[1],p[0]];
+    if(window.L&&map){
+      if(!drv.dot){drv.acc=L.circle(ll,{radius:acc,color:"#1f6feb",weight:1,fillOpacity:.12}).addTo(map);drv.dot=L.circleMarker(ll,{radius:9,color:"#fff",weight:3,fillColor:"#1f6feb",fillOpacity:1}).addTo(map)}
+      else{drv.dot.setLatLng(ll);drv.acc.setLatLng(ll).setRadius(acc)}
+      if(drv.follow)map.setView(ll,Math.max(map.getZoom(),16),{animate:true});
+    }
+    var pr=project(p), along=drv.cum[pr.seg]+pr.t*(drv.cum[pr.seg+1]-drv.cum[pr.seg]);
+    var total=drv.cum[drv.cum.length-1], left=Math.max(0,total-along);
+    // off route?
+    if(pr.d>Math.max(45,acc*1.5)){drv.off++;
+      if(drv.off===3){say("You have left the route.");$("trOffBox").hidden=false}
+      $("trNext").textContent="Off the route ("+Math.round(pr.d*1.0936)+" yd away)"; $("trNextD").textContent="Go back to the green line, or rebuild the route.";
+      return}
+    if(drv.off>=3){$("trOffBox").hidden=true;say("Back on the route.")}
+    drv.off=0; drv.idx=pr.seg;
+    if(left<35&&!drv.arrived){drv.arrived=true;say("You have arrived.");$("trNext").textContent="Arrived ✓";$("trNextD").textContent="";setTimeout(function(){stopDrive(true)},4000);return}
+    // next manoeuvre ahead of us
+    var nx=null;
+    for(var j=0;j<drv.man.length;j++){var m=drv.man[j];if(!m.first&&drv.cum[m.i]>along+5){nx=m;break}}
+    if(!nx){$("trNext").textContent="Continue to the destination";$("trNextD").textContent=stepDist(left);return}
+    var dist=drv.cum[nx.i]-along;
+    $("trNext").textContent=nx.t; $("trNextD").textContent="in "+stepDist(dist)+" · "+stepDist(left)+" to go";
+    var arr=/^arrive/i.test(nx.t), side=(nx.t.match(/on the (left|right)/i)||[""])[0];
+    if(dist<=45&&!nx.now){nx.now=nx.near=nx.far=true;say(arr?"Your destination is ahead"+(side?", "+side:""):nx.t)}
+    else if(dist<=170&&dist>60&&!nx.near){nx.near=nx.far=true;say(spokenDist(dist)+", "+(arr?"your destination"+(side?", "+side:""):lc(nx.t)))}
+    else if(dist<=900&&dist>350&&!nx.far){nx.far=true;say(spokenDist(dist)+", "+(arr?"you will arrive at your destination":lc(nx.t)))}
+  }
+  $("trDrive").onclick=startDrive;
+  $("trStop").onclick=function(){stopDrive(false)};
+  $("trRecentre").onclick=function(){if(drv){drv.follow=true;this.hidden=true;if(drv.dot&&map)map.setView(drv.dot.getLatLng(),17)}};
+  $("trRebuild").onclick=function(){if(!cur)return;var d=cur;stopDrive(true);$("trOffBox").hidden=true;openTruck(d)};
+
   function openTruck(dest){
     if(!cfg().url){$("tr").hidden=true;alertBox("Connect this phone to My places first (My places → Connect this phone).");return}
     cur=dest; show(true);
     $("trTitle").textContent="Truck route to "+(dest.name||"this point");
     $("trSum").textContent=""; $("trSteps").innerHTML=""; $("trWarn").innerHTML=""; $("trErr").textContent="";
+    stopDrive(true); shown=null; $("trDriveBox").hidden=true;
     $("trStatus").textContent="Finding your position…";
     getPos().then(function(from){
       if(cur!==dest)return;
