@@ -17,7 +17,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 main{max-width:520px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) 16px 32px}
-h1{font-size:22px;margin:4px 0 14px;letter-spacing:-.01em}
+h1{font-size:21px;font-weight:600;margin:4px 0 20px;letter-spacing:.01em}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
 label{display:block;font-size:14px;color:var(--muted);margin:0 0 4px}
 .row{display:flex;gap:10px}
@@ -40,7 +40,7 @@ button,.btn{display:flex;align-items:center;justify-content:center;text-align:ce
 .two{display:flex;gap:10px}.two>*{flex:1}
 .two .btn{font-size:16px;white-space:nowrap;padding:0 8px}
 [hidden]{display:none!important}
-.tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:5px;margin:0 0 14px;position:sticky;top:max(6px,env(safe-area-inset-top));z-index:10;box-shadow:0 -20px 0 6px var(--bg),0 2px 8px rgba(0,0,0,.06)}
+.tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:5px;margin:0 0 14px;position:sticky;top:max(6px,env(safe-area-inset-top));z-index:10;box-shadow:0 -12px 0 3px var(--bg),0 2px 8px rgba(0,0,0,.05)}
 .tabs button{flex:1;margin:0;min-height:46px;background:transparent;color:var(--ink);border-radius:10px;font-size:17px}
 .tabs button.on{background:var(--accent);color:var(--accent-ink)}
 .upd{display:flex;align-items:center;gap:10px;background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:10px 12px;margin:0 0 12px;font-size:15px}
@@ -86,6 +86,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 .chk.ok{border-color:#2e7d32}.chk.bad{border-color:#c62828;background:rgba(198,40,40,.08)}.chk.mid{border-color:#f9a825;background:rgba(249,168,37,.1)}
 .wl{margin:6px 0;padding-left:20px;font-size:15px}.wl li{padding:5px 0;cursor:pointer}.wl li.red{color:var(--err)}
 .warnline{color:var(--err)}
+.ic{width:22px;height:22px;margin-right:8px;flex:0 0 auto}.place .tk .ic{margin:0}
 .w3w{border-top:1px solid var(--line);margin-top:10px;padding-top:4px}
 .drv{position:relative;background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:12px 14px;margin:8px 0}
 .drv .nx{font-size:22px;font-weight:700;line-height:1.25}
@@ -156,7 +157,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     <div class="w3w">
       <div class="pc" id="w3wShow"></div>
       <div class="two">
-        <a class="btn plain" id="w3wOpen" href="https://what3words.com/" target="_blank" rel="noopener">what3words ↗</a>
+        <a class="btn plain" id="w3wOpen" href="https://what3words.com/" target="_blank" rel="noopener">Open what3words</a>
         <button class="btn plain" id="w3wPaste" type="button">Paste ///words</button>
       </div>
       <input id="w3wIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="or type ///three.words.here" style="font-size:17px;margin-top:8px">
@@ -168,8 +169,8 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
       <button class="btn plain" id="copy" type="button">Copy link</button>
     </div>
     <button class="btn plain" id="share" type="button" hidden>Share…</button>
-    <button class="btn plain" id="savePlace" type="button">☆ Save this place</button>
-    <button class="btn plain" id="truckHere" type="button">🚚 Truck route here (backup)</button>
+    <button class="btn plain" id="savePlace" type="button">Save this place</button>
+    <button class="btn plain" id="truckHere" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 6.5h11v9h-11zM13.5 9.5h4l3 3v3h-7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="6.5" cy="17" r="1.8" fill="var(--card)" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="17" r="1.8" fill="var(--card)" stroke="currentColor" stroke-width="1.6"/></svg>Truck route (backup)</button>
     <div class="small" id="acc"></div>
   </div>
   </div>
@@ -197,7 +198,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     <textarea id="pfNote" maxlength="2000" placeholder="e.g. Gate by the warehouse, key at security, code 1234"></textarea>
     <div class="err" id="pfErr" role="alert"></div>
     <button id="pfSave" type="button">Save</button>
-    <button class="btn plain" id="pfTruck" type="button" hidden>🚚 Truck route (backup)</button>
+    <button class="btn plain" id="pfTruck" type="button" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 6.5h11v9h-11zM13.5 9.5h4l3 3v3h-7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="6.5" cy="17" r="1.8" fill="var(--card)" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="17" r="1.8" fill="var(--card)" stroke="currentColor" stroke-width="1.6"/></svg>Truck route (backup)</button>
     <div class="two">
       <a class="btn plain" id="pfGo" target="_blank" rel="noopener" hidden>Route</a>
       <a class="btn plain" id="pfWa" target="_blank" rel="noopener" hidden>WhatsApp</a>
@@ -216,12 +217,12 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
       <div class="nx" id="trNext"></div>
       <div class="nxd" id="trNextD"></div>
       <div id="trOffBox" hidden><button class="btn plain" id="trRebuild" type="button">Rebuild route from here</button></div>
-      <div class="drvb"><button class="btn plain" id="trRecentre" type="button" hidden>Re-centre</button><button class="btn danger" id="trStop" type="button">■ Stop</button></div>
+      <div class="drvb"><button class="btn plain" id="trRecentre" type="button" hidden>Re-centre</button><button class="btn danger" id="trStop" type="button">Stop</button></div>
     </div>
     <div id="trMap" class="trmap"></div>
     <div id="trWarn"></div>
     <div id="trDriveBox" hidden>
-      <button id="trDrive" type="button">▶ Start driving (voice)</button>
+      <button id="trDrive" type="button">Start driving · voice guidance</button>
       <div class="pt">Grid Finder follows you on the map and speaks each turn. Keep it open on the screen (phone on charge). Works without internet once the route is built.</div>
     </div>
     <ol id="trSteps" class="steps"></ol>
@@ -674,7 +675,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 })();
 </script>
 <script>
-window.GF_VERSION="3.10";
+window.GF_VERSION="3.11";
 (function(){
   // ---- My places: list kept in the owner's Google sheet via a small Google program (bridge) ----
   var $=function(id){return document.getElementById(id)};
@@ -742,7 +743,7 @@ window.GF_VERSION="3.10";
       return (p.name+" "+(p.note||"")+" "+(p.postcode||"")+" "+(p.group||"")).toLowerCase().indexOf(q)>=0;
     }).sort(function(a,b){return String(a.name).localeCompare(String(b.name))});
     var box=$("mpList"); box.innerHTML="";
-    if(!places.length){box.innerHTML='<div class="empty">No places yet. Tap “+ Add place”, or find a point and tap “☆ Save this place”.</div>';return}
+    if(!places.length){box.innerHTML='<div class="empty">No places yet. Tap “+ Add place”, or find a point and tap “Save this place”.</div>';return}
     if(!list.length){box.innerHTML='<div class="empty">Nothing found.</div>';return}
     var total=list.length, cut=!q&&group==="All"&&!showAll&&total>LIMIT;
     if(cut)list=list.slice(0,LIMIT);
@@ -753,7 +754,7 @@ window.GF_VERSION="3.10";
       if(p.easting!==""&&p.easting!=null)meta.push('<span class="nw">X '+Math.round(p.easting)+' Y '+Math.round(p.northing)+'</span>');
       row.innerHTML='<div class="info"><div class="nm">'+esc(p.name)+'</div><div class="meta">'+meta.join(" · ")+'</div>'+(p.note?'<div class="note">'+esc(p.note)+'</div>':'')+'</div>'+
         '<a class="btn go" target="_blank" rel="noopener" href="'+routeUrl(p)+'" aria-label="Route to '+esc(p.name)+'">Go</a>'+
-        '<button class="btn go tk plain" type="button" aria-label="Truck route to '+esc(p.name)+'">🚚</button>';
+        '<button class="btn go tk plain" type="button" aria-label="Truck route to '+esc(p.name)+'"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 6.5h11v9h-11zM13.5 9.5h4l3 3v3h-7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="6.5" cy="17" r="1.8" fill="var(--card)" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="17" r="1.8" fill="var(--card)" stroke="currentColor" stroke-width="1.6"/></svg></button>';
       row.querySelector(".tk").onclick=function(){if(window.GF_openTruck)window.GF_openTruck({lat:+p.lat,lon:+p.lon,name:p.name})};
       row.querySelector(".info").onclick=function(){ if(p.note&&!row.classList.contains("open")){row.classList.add("open");return} openForm(p) };
       box.appendChild(row);
@@ -821,7 +822,7 @@ window.GF_VERSION="3.10";
       place.id=j.id;
       var i=places.findIndex(function(x){return x.id===j.id}); if(i>=0)places[i]=Object.assign({},places[i],place); else places.push(place);
       saveCache(); closeForm(); render(); status("Saved ✓"); refresh();
-      var sp=$("savePlace"); sp.textContent="Saved ✓ — it is in My places"; setTimeout(function(){sp.textContent="☆ Save this place"},3000);
+      var sp=$("savePlace"); sp.textContent="Saved ✓ — it is in My places"; setTimeout(function(){sp.textContent="Save this place"},3000);
     }).catch(function(e){b.disabled=false;b.textContent=editing?"Save changes":"Save";$("pfErr").textContent=e.message});
   };
 
