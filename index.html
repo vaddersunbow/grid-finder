@@ -86,6 +86,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 .chk.ok{border-color:#2e7d32}.chk.bad{border-color:#c62828;background:rgba(198,40,40,.08)}.chk.mid{border-color:#f9a825;background:rgba(249,168,37,.1)}
 .wl{margin:6px 0;padding-left:20px;font-size:15px}.wl li{padding:5px 0;cursor:pointer}.wl li.red{color:var(--err)}
 .warnline{color:var(--err)}
+.w3w{border-top:1px solid var(--line);margin-top:10px;padding-top:4px}
 .drv{position:relative;background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:12px 14px;margin:8px 0}
 .drv .nx{font-size:22px;font-weight:700;line-height:1.25}
 .drv .nxd{font-size:16px;opacity:.9;margin-top:4px}
@@ -152,6 +153,15 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     <div class="pc" id="addr"></div>
     <div class="coords" id="coords"></div>
     <iframe class="map" id="map" title="Map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+    <div class="w3w">
+      <div class="pc" id="w3wShow"></div>
+      <div class="two">
+        <a class="btn plain" id="w3wOpen" href="https://what3words.com/" target="_blank" rel="noopener">what3words ↗</a>
+        <button class="btn plain" id="w3wPaste" type="button">Paste ///words</button>
+      </div>
+      <input id="w3wIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="or type ///three.words.here" style="font-size:17px;margin-top:8px">
+      <div class="small" id="w3wHelp">what3words: open their app at this spot, copy the 3 words, come back and tap “Paste”. They are added to the WhatsApp message.</div>
+    </div>
     <a class="btn wa" id="wa" target="_blank" rel="noopener">Send in WhatsApp</a>
     <div class="two">
       <a class="btn plain" id="gm" target="_blank" rel="noopener">Google Maps</a>
@@ -517,12 +527,39 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
     },{enableHighAccuracy:true,timeout:20000,maximumAge:0});
   }
 
+  // what3words: the owner copies the 3 words from the what3words app and pastes them here (no automatic lookup).
+  function parseW3w(t){
+    var x=String(t||"").toLowerCase(), L="[a-z\\u00e0-\\u024f]{1,30}", D="[.\\u3002\\uff61]";
+    var m=x.match(new RegExp("(?:///|w3w\\.co/|what3words\\.com/)\\s*("+L+")"+D+"("+L+")"+D+"("+L+")"))   // ///a.b.c or link
+       || x.match(new RegExp("(?:^|[^a-z0-9\\u00e0-\\u024f.])("+L+")"+D+"("+L+")"+D+"("+L+")(?![a-z0-9\\u00e0-\\u024f.])"))  // a.b.c
+       || x.trim().match(new RegExp("^("+L+")\\s+("+L+")\\s+("+L+")$"));                                    // "a b c" typed alone
+    if(m&&(/^(www|http|https)$/.test(m[1])||/^(com|net|org|uk|co|io|gov|info|me)$/.test(m[3])))m=null; // a web address, not 3 words
+    return m?m[1]+"."+m[2]+"."+m[3]:null;
+  }
+  function setW3w(w){
+    if(!cur)return;
+    cur.w3w=w;
+    $("w3wShow").textContent=w?"what3words: ///"+w:"";
+    $("w3wIn").value=w?"///"+w:$("w3wIn").value;
+    $("w3wHelp").textContent=w?"Added to the WhatsApp message ✓ Check it is the same spot.":"what3words: open their app at this spot, copy the 3 words, come back and tap “Paste”. They are added to the WhatsApp message.";
+    buildText();
+  }
+  function resetW3w(){$("w3wShow").textContent="";$("w3wIn").value="";$("w3wHelp").textContent="what3words: open their app at this spot, copy the 3 words, come back and tap “Paste”. They are added to the WhatsApp message."}
+  $("w3wIn").addEventListener("input",function(){var w=parseW3w(this.value);if(w)setW3w(w);else if(!this.value.trim()&&cur){cur.w3w=null;$("w3wShow").textContent="";buildText()}});
+  $("w3wPaste").onclick=function(){
+    if(!navigator.clipboard||!navigator.clipboard.readText){$("w3wIn").focus();$("w3wHelp").textContent="Long-press the box below and choose Paste.";return}
+    navigator.clipboard.readText().then(function(t){var w=parseW3w(t);if(w)setW3w(w);else{$("w3wHelp").textContent="No ///three.words found in what you copied. In what3words tap Copy, then try again.";}},
+      function(){$("w3wIn").focus();$("w3wHelp").textContent="Long-press the box below and choose Paste."});
+  };
+  window.GF_parseW3w=parseW3w;
+
   function buildText(){
     if(!cur)return;
     var t="Location X "+cur.E+", Y "+cur.N;
     if(cur.addr)t+=", near "+cur.addr+(cur.pc&&!/[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}/i.test(cur.addr)?", "+cur.pc:"");
     else if(cur.pc)t+=", near "+cur.pc+(cur.pcDist!=null?" ("+cur.pcDist+" m)":"");
     t+=": "+lastLink;
+    if(cur.w3w)t+="\nwhat3words ///"+cur.w3w+" https://w3w.co/"+cur.w3w;
     lastText=t;
     $("wa").href="https://wa.me/?text="+encodeURIComponent(lastText);
   }
@@ -604,7 +641,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 
   function show(latN,lonN,E,N,precise,accuracy){
     var lat=latN.toFixed(6), lon=lonN.toFixed(6);
-    cur={E:Math.round(E),N:Math.round(N),pc:null,pcDist:null,addr:null,lat:latN,lon:lonN};
+    cur={E:Math.round(E),N:Math.round(N),pc:null,pcDist:null,addr:null,w3w:null,lat:latN,lon:lonN}; resetW3w();
     window.GF_CUR=cur;
     lastLink="https://www.google.com/maps/search/?api=1&query="+lat+","+lon;
     $("xy").textContent="X "+cur.E+"  Y "+cur.N;
@@ -637,7 +674,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 })();
 </script>
 <script>
-window.GF_VERSION="3.9";
+window.GF_VERSION="3.10";
 (function(){
   // ---- My places: list kept in the owner's Google sheet via a small Google program (bridge) ----
   var $=function(id){return document.getElementById(id)};
@@ -759,7 +796,7 @@ window.GF_VERSION="3.9";
     editing=p||null; $("pfErr").textContent="";
     var src=p||pending;
     $("pfTitle").textContent=p?"Place":"Save place";
-    $("pfName").value=p?p.name:""; $("pfNote").value=p?(p.note||""):"";
+    $("pfName").value=p?p.name:""; $("pfNote").value=p?(p.note||""):(pending&&pending.w3w?"///"+pending.w3w:"");
     fillGroups(p?p.group:null);
     $("pfPoint").textContent=src?pointText(src):"";
     $("pfDel").hidden=!p; $("pfGo").hidden=!p; $("pfWa").hidden=!p; $("pfTruck").hidden=!p;
@@ -799,7 +836,7 @@ window.GF_VERSION="3.9";
   // Save from the result card (current point)
   $("savePlace").onclick=function(){
     var c=window.GF_CUR; if(!c)return;
-    pending={lat:c.lat,lon:c.lon,easting:c.E,northing:c.N,postcode:c.pc||""};
+    pending={lat:c.lat,lon:c.lon,easting:c.E,northing:c.N,postcode:c.pc||"",w3w:c.w3w||""};
     openForm(null);
   };
   // "+ Add place" (in My places): save where the phone is now
