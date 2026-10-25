@@ -80,7 +80,13 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 .trh{display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;background:var(--bg);padding:6px 0;z-index:5}
 .trh h3{margin:0;font-size:19px}
 .trh .linkbtn{font-size:17px;padding:8px 4px}
-.trmap{width:100%;height:55vh;min-height:280px;border-radius:12px;margin:10px 0;background:var(--card);border:1px solid var(--line)}
+.trmap{position:relative;overflow:hidden;width:100%;height:55vh;min-height:280px;border-radius:12px;margin:10px 0;background:var(--card);border:1px solid var(--line)}
+#trMap{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:50% 50%;transition:transform .7s ease}
+.mapui{position:absolute;right:8px;top:8px;z-index:1000;display:flex;flex-direction:column;gap:6px}
+.mbtn{width:42px;height:42px;min-height:0;margin:0;padding:0;border-radius:10px;background:var(--card);color:var(--ink);border:1px solid var(--line);font-size:22px;font-weight:500;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.mbtn svg{width:26px;height:26px}#trNeedle{transform-origin:12px 12px;transition:transform .7s ease}
+.mapattr{position:absolute;right:0;bottom:0;z-index:1000;font-size:11px;background:rgba(255,255,255,.75);color:#333;padding:1px 6px;border-top-left-radius:6px}
+.gfarrow .ar{width:40px;height:40px;transition:transform .5s ease}
 .steps{margin:10px 0;padding-left:24px}.steps li{padding:6px 0;border-bottom:1px solid var(--line)}.steps .sd{color:var(--muted);font-size:14px;white-space:nowrap}
 .chk{border-radius:10px;padding:10px 12px;font-size:15px;margin:6px 0;border:1px solid var(--line);background:var(--card)}
 .chk.ok{border-color:#2e7d32}.chk.bad{border-color:#c62828;background:rgba(198,40,40,.08)}.chk.mid{border-color:#f9a825;background:rgba(249,168,37,.1)}
@@ -219,7 +225,15 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
       <div id="trOffBox" hidden><button class="btn plain" id="trRebuild" type="button">Rebuild route from here</button></div>
       <div class="drvb"><button class="btn plain" id="trRecentre" type="button" hidden>Re-centre</button><button class="btn danger" id="trStop" type="button">Stop</button></div>
     </div>
-    <div id="trMap" class="trmap"></div>
+    <div id="trMapBox" class="trmap">
+      <div id="trMap"></div>
+      <div class="mapui">
+        <button id="trCompass" class="mbtn" type="button" aria-label="Map: direction of travel up / north up" title="Direction up / North up"><svg viewBox="0 0 24 24" aria-hidden="true"><g id="trNeedle"><path d="M12 3l3.2 9H8.8z" fill="#c62828"/><path d="M12 21l-3.2-9h6.4z" fill="currentColor" opacity=".55"/></g></svg></button>
+        <button id="trZin" class="mbtn" type="button" aria-label="Zoom in">+</button>
+        <button id="trZout" class="mbtn" type="button" aria-label="Zoom out">−</button>
+      </div>
+      <div class="mapattr">© OpenStreetMap contributors</div>
+    </div>
     <div id="trWarn"></div>
     <div id="trDriveBox" hidden>
       <button id="trDrive" type="button">Start driving · voice guidance</button>
@@ -675,7 +689,7 @@ select{width:100%;font-size:17px;padding:12px;border:1px solid var(--line);borde
 })();
 </script>
 <script>
-window.GF_VERSION="3.11";
+window.GF_VERSION="3.12";
 (function(){
   // ---- My places: list kept in the owner's Google sheet via a small Google program (bridge) ----
   var $=function(id){return document.getElementById(id)};
@@ -1082,8 +1096,8 @@ window.GF_VERSION="3.11";
     (r.steps||[]).forEach(function(s){var li=document.createElement("li");li.innerHTML=esc(s[0])+(s[1]?" <span class='sd'>"+stepDist(s[1])+"</span>":"");ol.appendChild(li)});
     return loadLeaflet().then(function(){
       if(!map){
-        map=L.map("trMap",{zoomControl:true,attributionControl:true});
-        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map);
+        map=L.map("trMap",{zoomControl:false,attributionControl:false});
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(map);
         window.GF_trMap=map;
         map.on("dragstart",function(){if(drv){drv.follow=false;$("trRecentre").hidden=false}});
       }
@@ -1093,7 +1107,7 @@ window.GF_VERSION="3.11";
       var pl=L.polyline(ll,{color:"#0f5c4d",weight:6,opacity:.85}).addTo(layer);
       L.circleMarker(ll[0],{radius:8,color:"#fff",weight:3,fillColor:"#1f6feb",fillOpacity:1}).bindPopup("Start (you)").addTo(layer);
       L.circleMarker(ll[ll.length-1],{radius:9,color:"#fff",weight:3,fillColor:"#0f5c4d",fillOpacity:1}).bindPopup(esc(dest.name||"Destination")).addTo(layer);
-      setTimeout(function(){map.invalidateSize();map.fitBounds(pl.getBounds(),{padding:[24,24]})},60);
+      setTimeout(function(){applyMode();map.fitBounds(pl.getBounds(),{padding:[24,24]})},60);
     }).catch(function(){$("trErr").textContent="The map did not load (no internet?). The steps below still work."});
   }
 
@@ -1133,18 +1147,55 @@ window.GF_VERSION="3.11";
   }
   document.addEventListener("visibilitychange",function(){if(drv&&document.visibilityState==="visible")wake()});
 
+  // ---- map turns with the direction of travel (like Google Maps); compass button switches to north up ----
+  var rotDeg=0;
+  function headingUp(){var v=LS.get("gf_headup");return v!=="0"}
+  function rotating(){return !!(drv&&headingUp())}
+  function sizeMap(rot){
+    var box=$("trMapBox"), el=$("trMap"), w=box.clientWidth, h=box.clientHeight;
+    if(rot){var D=Math.ceil(Math.sqrt(w*w+h*h));el.style.width=D+"px";el.style.height=D+"px";el.style.left=((w-D)/2)+"px";el.style.top=((h-D)/2)+"px"}
+    else{el.style.width="";el.style.height="";el.style.left="";el.style.top=""}
+    if(map)map.invalidateSize({pan:false});
+  }
+  function setRot(target){ // target = screen rotation of the map in degrees
+    var diff=((target-rotDeg)%360+540)%360-180; rotDeg+=diff;
+    $("trMap").style.transform=rotDeg?"rotate("+rotDeg+"deg)":"";
+    $("trNeedle").style.transform="rotate("+rotDeg+"deg)";
+  }
+  function applyMode(){
+    var rot=rotating(); sizeMap(rot);
+    if(!rot){setRot(0);if(map)map.dragging.enable()}
+    else{if(map)map.dragging.disable();if(drv&&drv.bearing!=null)setRot(-drv.bearing)}
+    $("trCompass").setAttribute("aria-pressed",rot?"true":"false");
+  }
+  function bearingOf(a,b){var r=Math.PI/180,y=Math.sin((b[0]-a[0])*r)*Math.cos(b[1]*r),x=Math.cos(a[1]*r)*Math.sin(b[1]*r)-Math.sin(a[1]*r)*Math.cos(b[1]*r)*Math.cos((b[0]-a[0])*r);return (Math.atan2(y,x)/r+360)%360}
+  function arrowIcon(){return L.divIcon({className:"gfarrow",iconSize:[40,40],iconAnchor:[20,20],html:'<div class="ar"><svg viewBox="0 0 40 40" width="40" height="40"><path d="M20 4 L32 34 L20 27 L8 34 Z" fill="#1f6feb" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg></div>'})}
+  function follow(ll){
+    if(!map||!drv||!drv.follow)return;
+    var z=Math.max(map.getZoom(),16), c=L.latLng(ll);
+    if(rotating()&&drv.bearing!=null){ // keep the arrow in the lower part of the screen, so you see more road ahead
+      var k=$("trMapBox").clientHeight*0.28, b=drv.bearing*Math.PI/180, p=map.project(c,z);
+      c=map.unproject(p.add(L.point(Math.sin(b)*k,-Math.cos(b)*k)),z);
+    }
+    map.setView(c,z,{animate:true});
+  }
+  $("trCompass").onclick=function(){LS.set("gf_headup",headingUp()?"0":"1");applyMode();if(drv&&drv.dot)follow(drv.dot.getLatLng())};
+  $("trZin").onclick=function(){if(map)map.zoomIn()};
+  $("trZout").onclick=function(){if(map)map.zoomOut()};
+  window.addEventListener("resize",function(){if(!$("tr").hidden&&map)setTimeout(applyMode,100)});
+
   function startDrive(){
     if(!shown||drv)return;
     var r=shown.route, L=r.line, cum=[0];
     for(var i=1;i<L.length;i++)cum.push(cum[i-1]+hav(L[i-1],L[i]));
     // manoeuvres = start of each step after the first (the first step is "Head …")
     var man=(r.steps||[]).map(function(s,i){return {i:Math.max(0,Math.min(L.length-1,s[3]||0)),t:s[0],far:false,near:false,first:i===0}});
-    drv={L:L,cum:cum,man:man,idx:0,off:0,follow:true,watch:null,lock:null,dot:null,acc:null,arrived:false,lastFix:0};
+    drv={L:L,cum:cum,man:man,idx:0,off:0,follow:true,watch:null,lock:null,dot:null,acc:null,arrived:false,lastFix:0,bearing:null,prev:null};
     $("trDriveBox").hidden=true; $("trDriving").hidden=false; $("trNext").textContent="Waiting for your position…"; $("trNextD").textContent="";
     say("Starting truck route. Keep Grid Finder open on the screen.");
     wake();
     $("tr").classList.add("driving");
-    if(map){setTimeout(function(){map.invalidateSize();map.setZoom(17)},50)}
+    if(map){setTimeout(function(){applyMode();map.setZoom(17)},60)}
     setTimeout(function(){var y=$("trDriving").getBoundingClientRect().top+$("tr").scrollTop-52;$("tr").scrollTo({top:y,behavior:"smooth"})},80);
     if(!navigator.geolocation){$("trNext").textContent="This phone cannot share location.";return}
     drv.watch=navigator.geolocation.watchPosition(onFix,function(e){if(drv)$("trNext").textContent=e&&e.code===1?"Location is blocked. Allow location for Grid Finder.":"No GPS signal yet…"},{enableHighAccuracy:true,maximumAge:0,timeout:30000});
@@ -1155,7 +1206,7 @@ window.GF_VERSION="3.11";
     try{if(drv.lock)drv.lock.release()}catch(e){}
     try{if(drv.dot)drv.dot.remove();if(drv.acc)drv.acc.remove()}catch(e){}
     try{if(window.speechSynthesis)speechSynthesis.cancel()}catch(e){}
-    drv=null; $("tr").classList.remove("driving"); if(map)setTimeout(function(){map.invalidateSize()},50); $("trDriving").hidden=true; $("trRecentre").hidden=true; if(shown)$("trDriveBox").hidden=false;
+    drv=null; $("tr").classList.remove("driving"); if(map)setTimeout(function(){applyMode()},60); $("trDriving").hidden=true; $("trRecentre").hidden=true; if(shown)$("trDriveBox").hidden=false;
     if(!silent)say("Truck route stopped.");
   }
   window.GF_stopDrive=stopDrive;
@@ -1173,12 +1224,22 @@ window.GF_VERSION="3.11";
   function onFix(pos){
     if(!drv)return;
     var p=[pos.coords.longitude,pos.coords.latitude], acc=pos.coords.accuracy||0, ll=[p[1],p[0]];
-    if(window.L&&map){
-      if(!drv.dot){drv.acc=L.circle(ll,{radius:acc,color:"#1f6feb",weight:1,fillOpacity:.12}).addTo(map);drv.dot=L.circleMarker(ll,{radius:9,color:"#fff",weight:3,fillColor:"#1f6feb",fillOpacity:1}).addTo(map)}
-      else{drv.dot.setLatLng(ll);drv.acc.setLatLng(ll).setRadius(acc)}
-      if(drv.follow)map.setView(ll,Math.max(map.getZoom(),16),{animate:true});
-    }
     var pr=project(p), along=drv.cum[pr.seg]+pr.t*(drv.cum[pr.seg+1]-drv.cum[pr.seg]);
+    // direction of travel: along the route when on it (steady), otherwise from the phone / from movement
+    var hd=null;
+    if(pr.d<30&&pr.seg<drv.L.length-1)hd=bearingOf(drv.L[pr.seg],drv.L[pr.seg+1]);
+    else if(pos.coords.heading!=null&&!isNaN(pos.coords.heading)&&(pos.coords.speed==null||pos.coords.speed>1.5))hd=pos.coords.heading;
+    else if(drv.prev&&hav(drv.prev,p)>8)hd=bearingOf(drv.prev,p);
+    if(!drv.prev||hav(drv.prev,p)>8)drv.prev=p;
+    if(hd!=null)drv.bearing=hd;
+    if(window.L&&map){
+      if(!drv.dot){drv.acc=L.circle(ll,{radius:acc,color:"#1f6feb",weight:1,fillOpacity:.12,interactive:false}).addTo(map);drv.dot=L.marker(ll,{icon:arrowIcon(),interactive:false,zIndexOffset:1000}).addTo(map)}
+      else{drv.dot.setLatLng(ll);drv.acc.setLatLng(ll).setRadius(acc)}
+      var ar=drv.dot.getElement()&&drv.dot.getElement().querySelector(".ar");
+      if(ar&&drv.bearing!=null)ar.style.transform="rotate("+drv.bearing+"deg)";
+      if(rotating()&&drv.bearing!=null)setRot(-drv.bearing);
+      follow(ll);
+    }
     var total=drv.cum[drv.cum.length-1], left=Math.max(0,total-along);
     // off route?
     if(pr.d>Math.max(45,acc*1.5)){drv.off++;
@@ -1201,7 +1262,7 @@ window.GF_VERSION="3.11";
   }
   $("trDrive").onclick=startDrive;
   $("trStop").onclick=function(){stopDrive(false)};
-  $("trRecentre").onclick=function(){if(drv){drv.follow=true;this.hidden=true;if(drv.dot&&map)map.setView(drv.dot.getLatLng(),17)}};
+  $("trRecentre").onclick=function(){if(drv){drv.follow=true;this.hidden=true;if(drv.dot&&map){map.setZoom(17);follow(drv.dot.getLatLng())}}};
   $("trRebuild").onclick=function(){if(!cur)return;var d=cur;stopDrive(true);$("trOffBox").hidden=true;openTruck(d)};
 
   function openTruck(dest){
